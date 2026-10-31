@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { Track, AudioOutputStatus } from "../types/music";
+import { AudioEngine } from "../services/audioEngine";
 
 interface PlayerState {
   currentTrack: Track | null;
@@ -87,6 +88,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentTimeMs: 0,
       durationMs: track.durationMs || 180000,
     });
+
+    AudioEngine.playTrack(track);
   },
 
   togglePlayPause: () => {
@@ -95,16 +98,30 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       get().playTrack(queue[0]);
       return;
     }
-    set({ isPlaying: !isPlaying });
+    const nextState = !isPlaying;
+    set({ isPlaying: nextState });
+    if (nextState) {
+      AudioEngine.resume();
+    } else {
+      AudioEngine.pause();
+    }
   },
 
-  pause: () => set({ isPlaying: false }),
-  resume: () => set({ isPlaying: true }),
+  pause: () => {
+    set({ isPlaying: false });
+    AudioEngine.pause();
+  },
+
+  resume: () => {
+    set({ isPlaying: true });
+    AudioEngine.resume();
+  },
 
   seek: (timeMs: number) => {
     const { durationMs } = get();
     const clamped = Math.max(0, Math.min(timeMs, durationMs));
     set({ currentTimeMs: clamped });
+    AudioEngine.seek(clamped);
   },
 
   nextTrack: () => {
@@ -113,6 +130,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     if (repeatMode === "one") {
       set({ currentTimeMs: 0, isPlaying: true });
+      const current = queue[queueIndex];
+      if (current) AudioEngine.playTrack(current);
       return;
     }
 
@@ -124,6 +143,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         nextIdx = 0;
       } else {
         set({ isPlaying: false });
+        AudioEngine.pause();
         return;
       }
     }
@@ -137,6 +157,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         currentTimeMs: 0,
         durationMs: nextTrack.durationMs || 180000,
       });
+      AudioEngine.playTrack(nextTrack);
     }
   },
 
@@ -147,6 +168,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     // If more than 3 seconds in, restart track
     if (currentTimeMs > 3000) {
       set({ currentTimeMs: 0 });
+      AudioEngine.seek(0);
       return;
     }
 
@@ -164,12 +186,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         currentTimeMs: 0,
         durationMs: prevTrack.durationMs || 180000,
       });
+      AudioEngine.playTrack(prevTrack);
     }
   },
 
   setVolume: (vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
     set({ volume: clamped, isMuted: clamped === 0 });
+    AudioEngine.setVolume(clamped);
   },
 
   toggleMute: () => {

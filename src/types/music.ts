@@ -1,8 +1,9 @@
-export type SourceKind = "local" | "stream" | "personal-server";
+export type SourceKind = "local" | "stream" | "personal-server" | "video";
 
 export type PlaybackDescriptor =
   | { kind: "local"; path: string; fileIdentity?: string }
   | { kind: "stream"; url: string; expiresAt?: string; headers?: Record<string, string> }
+  | { kind: "video"; youtubeVideoId: string }
   | { kind: "personal-server"; serverId: string; trackId: string };
 
 export interface Track {
@@ -15,9 +16,11 @@ export interface Track {
   durationMs: number;
   artworkUrl?: string;
   sourceKind: SourceKind;
-  providerId: string; // "local" | "jamendo" | "navidrome"
+  providerId: string; // "local" | "jamendo" | "jiosaavn" | "youtube" | "navidrome"
   providerTrackId?: string;
   path?: string;
+  streamUrl?: string;
+  youtubeVideoId?: string;
   codec?: string; // "FLAC", "MP3", "WAV", "ALAC", "AAC", "Opus"
   sampleRate?: number; // 44100, 48000, 96000, 192000
   bitDepth?: number; // 16, 24, 32

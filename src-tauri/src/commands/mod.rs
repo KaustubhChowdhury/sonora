@@ -8,7 +8,9 @@ use crate::db::Database;
 use crate::library::scanner::{DbTrack, LibraryScanner, ScanResult};
 use crate::metadata::lyrics::{LyricsResult, LyricsService};
 use crate::providers::jamendo::{JamendoProvider, JamendoTrackItem};
+use crate::providers::jiosaavn::{JioSaavnProvider, JioSaavnTrackItem};
 use crate::providers::subsonic::{SubsonicConfig, SubsonicProvider, SubsonicTrackItem};
+use crate::providers::youtube::{YouTubeProvider, YouTubeTrackItem};
 
 pub struct AppState {
     pub db: Database,
@@ -245,6 +247,22 @@ pub async fn search_jamendo(
     limit: Option<usize>,
 ) -> Result<Vec<JamendoTrackItem>, String> {
     JamendoProvider::search_tracks(&query, None, limit.unwrap_or(20)).await
+}
+
+#[tauri::command]
+pub async fn search_jiosaavn(
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<JioSaavnTrackItem>, String> {
+    JioSaavnProvider::search_tracks(&query, limit.unwrap_or(20)).await
+}
+
+#[tauri::command]
+pub async fn search_youtube(
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<YouTubeTrackItem>, String> {
+    YouTubeProvider::search_tracks(&query, limit.unwrap_or(20)).await
 }
 
 #[tauri::command]

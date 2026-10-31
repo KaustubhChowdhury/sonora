@@ -48,6 +48,8 @@ pub fn run() {
             // Metadata & Providers
             commands::fetch_lyrics,
             commands::search_jamendo,
+            commands::search_jiosaavn,
+            commands::search_youtube,
             commands::test_subsonic_connection,
             commands::search_subsonic,
             commands::open_external,

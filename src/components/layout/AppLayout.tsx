@@ -5,6 +5,7 @@ import { MiniPlayer } from "./MiniPlayer";
 import { Inspector } from "./Inspector";
 import { FullPlayer } from "./FullPlayer";
 import { ContextMenu } from "../shared/ContextMenu";
+import { YouTubeHost } from "../player/YouTubeHost";
 import { AnimatedPage } from "../../animations/AnimatedPage";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
@@ -131,6 +132,9 @@ export const AppLayout: React.FC = () => {
 
       {/* Expanded Full-Screen Player Modal */}
       <FullPlayer />
+
+      {/* Embedded YouTube Picture-in-Picture / Audio Host */}
+      <YouTubeHost />
 
       {/* Floating Context Menu */}
       <ContextMenu />

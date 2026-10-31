@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Track, AudioDevice, AudioOutputStatus, DspSettings, LyricsData, FolderScanStatus } from "../types/music";
+import { Track, SourceKind, AudioDevice, AudioOutputStatus, DspSettings, LyricsData, FolderScanStatus } from "../types/music";
 
 export const isTauri = () => {
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
@@ -424,10 +424,11 @@ export class TauriBridge {
           title: item.name,
           artists: [item.artist_name],
           album: item.album_name || "Jamendo Release",
-          durationMs: item.duration,
-          sourceKind: "stream",
+          durationMs: (item.duration || 180) * 1000,
+          sourceKind: "stream" as SourceKind,
           providerId: "jamendo",
           providerTrackId: item.id,
+          streamUrl: item.audio,
           codec: "MP3",
           sampleRate: 44100,
           bitDepth: 16,
@@ -441,6 +442,69 @@ export class TauriBridge {
         }));
       } catch (err) {
         console.error("search_jamendo failed:", err);
+      }
+    }
+    return [];
+  }
+
+  static async searchJioSaavn(query: string, limit = 20): Promise<Track[]> {
+    if (isTauri()) {
+      try {
+        const items = await invoke<any[]>("search_jiosaavn", { query, limit });
+        return items.map((item) => ({
+          id: `jio_${item.id}`,
+          title: item.title,
+          artists: item.artists,
+          album: item.album,
+          durationMs: (item.duration_seconds || 180) * 1000,
+          sourceKind: "stream" as SourceKind,
+          providerId: "jiosaavn",
+          providerTrackId: item.id,
+          streamUrl: item.stream_url,
+          codec: "AAC",
+          sampleRate: 44100,
+          bitDepth: 16,
+          bitrate: item.bitrate || 320,
+          channels: 2,
+          artworkUrl: item.image,
+          attribution: `JioSaavn Music`,
+          downloadAllowed: false,
+          cachingAllowed: false,
+        }));
+      } catch (err) {
+        console.error("search_jiosaavn failed:", err);
+      }
+    }
+    return [];
+  }
+
+  static async searchYouTube(query: string, limit = 20): Promise<Track[]> {
+    if (isTauri()) {
+      try {
+        const items = await invoke<any[]>("search_youtube", { query, limit });
+        return items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          artists: [item.channel],
+          album: "YouTube Music",
+          durationMs: (item.duration_seconds || 180) * 1000,
+          sourceKind: "video" as SourceKind,
+          providerId: "youtube",
+          providerTrackId: item.youtube_video_id,
+          youtubeVideoId: item.youtube_video_id,
+          streamUrl: `https://www.youtube.com/watch?v=${item.youtube_video_id}`,
+          codec: "Opus",
+          sampleRate: 48000,
+          bitDepth: 16,
+          bitrate: 160,
+          channels: 2,
+          artworkUrl: item.thumbnail,
+          attribution: `YouTube - ${item.channel}`,
+          downloadAllowed: false,
+          cachingAllowed: false,
+        }));
+      } catch (err) {
+        console.error("search_youtube failed:", err);
       }
     }
     return [];
