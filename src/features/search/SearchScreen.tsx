@@ -57,15 +57,21 @@ export const SearchScreen: React.FC = () => {
 
     setIsSearchingOnline(true);
     try {
-      const [jio, yt, jam] = await Promise.all([
+      const [jioRes, ytRes, jamRes] = await Promise.allSettled([
         TauriBridge.searchJioSaavn(q, 15),
         TauriBridge.searchYouTube(q, 15),
         TauriBridge.searchJamendo(q, 10),
       ]);
 
-      setJiosaavnResults(jio);
-      setYoutubeResults(yt);
-      setOnlineJamendoResults(jam);
+      if (jioRes.status === "fulfilled") {
+        setJiosaavnResults(jioRes.value);
+      }
+      if (ytRes.status === "fulfilled") {
+        setYoutubeResults(ytRes.value);
+      }
+      if (jamRes.status === "fulfilled") {
+        setOnlineJamendoResults(jamRes.value);
+      }
     } catch (err) {
       console.error("Live search failed:", err);
     } finally {

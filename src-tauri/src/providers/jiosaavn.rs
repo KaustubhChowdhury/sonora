@@ -198,4 +198,18 @@ mod tests {
         assert!(url.starts_with("https://aac.saavncdn.com/"));
         assert!(url.contains("_320.mp4"));
     }
+
+    #[tokio::test]
+    async fn test_jiosaavn_live_search() {
+        let res = JioSaavnProvider::search_tracks("phonk", 5).await;
+        match res {
+            Ok(items) => {
+                println!("Live search returned {} items", items.len());
+                assert!(!items.is_empty());
+            }
+            Err(e) => {
+                panic!("Search failed with error: {}", e);
+            }
+        }
+    }
 }

@@ -448,9 +448,9 @@ export class TauriBridge {
   }
 
   static async searchJioSaavn(query: string, limit = 20): Promise<Track[]> {
-    if (isTauri()) {
-      try {
-        const items = await invoke<any[]>("search_jiosaavn", { query, limit });
+    try {
+      const items = await invoke<any[]>("search_jiosaavn", { query, limit });
+      if (items && Array.isArray(items)) {
         return items.map((item) => ({
           id: `jio_${item.id}`,
           title: item.title,
@@ -471,17 +471,17 @@ export class TauriBridge {
           downloadAllowed: false,
           cachingAllowed: false,
         }));
-      } catch (err) {
-        console.error("search_jiosaavn failed:", err);
       }
+    } catch (err) {
+      console.error("[TauriBridge] search_jiosaavn invoke failed:", err);
     }
     return [];
   }
 
   static async searchYouTube(query: string, limit = 20): Promise<Track[]> {
-    if (isTauri()) {
-      try {
-        const items = await invoke<any[]>("search_youtube", { query, limit });
+    try {
+      const items = await invoke<any[]>("search_youtube", { query, limit });
+      if (items && Array.isArray(items)) {
         return items.map((item) => ({
           id: item.id,
           title: item.title,
@@ -503,9 +503,9 @@ export class TauriBridge {
           downloadAllowed: false,
           cachingAllowed: false,
         }));
-      } catch (err) {
-        console.error("search_youtube failed:", err);
       }
+    } catch (err) {
+      console.error("[TauriBridge] search_youtube invoke failed:", err);
     }
     return [];
   }

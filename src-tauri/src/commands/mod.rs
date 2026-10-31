@@ -254,7 +254,13 @@ pub async fn search_jiosaavn(
     query: String,
     limit: Option<usize>,
 ) -> Result<Vec<JioSaavnTrackItem>, String> {
-    JioSaavnProvider::search_tracks(&query, limit.unwrap_or(20)).await
+    println!("[Sonora Backend] search_jiosaavn received query: '{}', limit: {:?}", query, limit);
+    let results = JioSaavnProvider::search_tracks(&query, limit.unwrap_or(20)).await;
+    match &results {
+        Ok(items) => println!("[Sonora Backend] search_jiosaavn returning {} items", items.len()),
+        Err(e) => println!("[Sonora Backend] search_jiosaavn error: {}", e),
+    }
+    results
 }
 
 #[tauri::command]
@@ -262,7 +268,13 @@ pub async fn search_youtube(
     query: String,
     limit: Option<usize>,
 ) -> Result<Vec<YouTubeTrackItem>, String> {
-    YouTubeProvider::search_tracks(&query, limit.unwrap_or(20)).await
+    println!("[Sonora Backend] search_youtube received query: '{}', limit: {:?}", query, limit);
+    let results = YouTubeProvider::search_tracks(&query, limit.unwrap_or(20)).await;
+    match &results {
+        Ok(items) => println!("[Sonora Backend] search_youtube returning {} items", items.len()),
+        Err(e) => println!("[Sonora Backend] search_youtube error: {}", e),
+    }
+    results
 }
 
 #[tauri::command]
