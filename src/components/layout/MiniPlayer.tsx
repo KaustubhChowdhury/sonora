@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "motion/react";
 import {
   Play,
   Pause,
@@ -89,14 +90,15 @@ export const MiniPlayer: React.FC = () => {
   const progressPercent = durationMs > 0 ? (currentTimeMs / durationMs) * 100 : 0;
 
   return (
-    <footer className="h-[92px] w-full bg-surface-muted/95 backdrop-blur-xl border-t border-white/[0.08] px-4 flex items-center justify-between select-none z-40 relative">
-      {/* Left Block: Track Identity */}
+    <footer className="h-[92px] w-full bg-[#141821]/95 backdrop-blur-xl border-t border-white/[0.08] px-4 flex items-center justify-between select-none z-40 relative">
+      {/* Left Block: Track Identity with Shared-element Artwork Transition */}
       <div className="flex items-center gap-3.5 w-[30%] min-w-0 pr-4">
         {currentTrack ? (
           <>
-            <div
+            <motion.div
+              layoutId={`track-artwork-${currentTrack.id}`}
               onClick={() => setFullPlayerOpen(true)}
-              className="relative group w-14 h-14 rounded-xl overflow-hidden bg-surface-elevated shrink-0 cursor-pointer shadow-md border border-white/5"
+              className="relative group w-14 h-14 rounded-xl overflow-hidden bg-[#1b2230] shrink-0 cursor-pointer shadow-md border border-white/10"
             >
               {currentTrack.artworkUrl ? (
                 <img
@@ -112,13 +114,13 @@ export const MiniPlayer: React.FC = () => {
               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <Maximize2 className="w-4 h-4 text-white" />
               </div>
-            </div>
+            </motion.div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p
                   onClick={() => setFullPlayerOpen(true)}
-                  className="font-semibold text-sm text-zinc-100 truncate hover:text-purple-300 transition-colors cursor-pointer"
+                  className="font-semibold text-sm text-zinc-100 truncate hover:text-[#9b7bff] transition-colors cursor-pointer"
                 >
                   {currentTrack.title}
                 </p>
@@ -157,17 +159,19 @@ export const MiniPlayer: React.FC = () => {
       <div className="flex flex-col items-center gap-1.5 w-[40%] max-w-[560px]">
         {/* Buttons */}
         <div className="flex items-center gap-4">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             onClick={toggleShuffle}
             title={isShuffle ? "Disable Shuffle" : "Enable Shuffle"}
             className={`p-1.5 rounded-lg transition-colors ${
-              isShuffle ? "text-purple-400 bg-purple-500/15" : "text-zinc-500 hover:text-zinc-300"
+              isShuffle ? "text-[#9b7bff] bg-purple-500/15" : "text-zinc-500 hover:text-zinc-300"
             }`}
           >
             <Shuffle className="w-4 h-4" />
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             onClick={() => {
               prevTrack();
               TauriBridge.resume();
@@ -176,25 +180,27 @@ export const MiniPlayer: React.FC = () => {
             className="p-1.5 rounded-lg text-zinc-300 hover:text-white transition-colors"
           >
             <SkipBack className="w-4 h-4 fill-current" />
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.94 }}
             onClick={() => {
               togglePlayPause();
               if (!isPlaying) TauriBridge.resume();
               else TauriBridge.pause();
             }}
             title={isPlaying ? "Pause" : "Play"}
-            className="w-10 h-10 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform"
+            className="w-10 h-10 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 flex items-center justify-center shadow-lg transition-transform"
           >
             {isPlaying ? (
               <Pause className="w-4 h-4 fill-current" />
             ) : (
               <Play className="w-4 h-4 fill-current ml-0.5" />
             )}
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             onClick={() => {
               nextTrack();
               TauriBridge.resume();
@@ -203,14 +209,15 @@ export const MiniPlayer: React.FC = () => {
             className="p-1.5 rounded-lg text-zinc-300 hover:text-white transition-colors"
           >
             <SkipForward className="w-4 h-4 fill-current" />
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             onClick={toggleRepeat}
             title={`Repeat: ${repeatMode}`}
             className={`p-1.5 rounded-lg transition-colors ${
               repeatMode !== "off"
-                ? "text-purple-400 bg-purple-500/15"
+                ? "text-[#9b7bff] bg-purple-500/15"
                 : "text-zinc-500 hover:text-zinc-300"
             }`}
           >
@@ -219,7 +226,7 @@ export const MiniPlayer: React.FC = () => {
             ) : (
               <Repeat className="w-4 h-4" />
             )}
-          </button>
+          </motion.button>
         </div>
 
         {/* Seekbar */}
@@ -233,12 +240,12 @@ export const MiniPlayer: React.FC = () => {
               max={durationMs || 1000}
               value={currentTimeMs}
               onChange={handleSeekChange}
-              className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-400 group-hover:h-1.5 transition-all"
+              className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#9b7bff] group-hover:h-1.5 transition-all"
             />
             {/* Custom filled progress track */}
             <div
               style={{ width: `${progressPercent}%` }}
-              className="absolute left-0 top-0 bottom-0 bg-purple-400 rounded-lg pointer-events-none group-hover:bg-purple-300"
+              className="absolute left-0 top-0 bottom-0 bg-[#9b7bff] rounded-lg pointer-events-none group-hover:bg-[#a78bfa]"
             />
           </div>
 
@@ -260,8 +267,8 @@ export const MiniPlayer: React.FC = () => {
 
         <button
           onClick={() => navigate("audio-studio")}
-          title="Open Audio Studio (Device & DSP Settings)"
-          className="p-2 rounded-lg text-zinc-400 hover:text-purple-300 hover:bg-white/[0.04] transition-colors"
+          title="Open Audio Studio"
+          className="p-2 rounded-lg text-zinc-400 hover:text-[#9b7bff] hover:bg-white/[0.04] transition-colors"
         >
           <Sliders className="w-4 h-4" />
         </button>
@@ -271,7 +278,7 @@ export const MiniPlayer: React.FC = () => {
           title="Lyrics"
           className={`p-2 rounded-lg transition-colors ${
             inspectorOpen && inspectorTab === "lyrics"
-              ? "text-purple-300 bg-purple-500/15"
+              ? "text-[#9b7bff] bg-purple-500/15"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]"
           }`}
         >
@@ -283,7 +290,7 @@ export const MiniPlayer: React.FC = () => {
           title="Queue"
           className={`p-2 rounded-lg transition-colors ${
             inspectorOpen && inspectorTab === "queue"
-              ? "text-purple-300 bg-purple-500/15"
+              ? "text-[#9b7bff] bg-purple-500/15"
               : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]"
           }`}
         >
@@ -314,7 +321,7 @@ export const MiniPlayer: React.FC = () => {
             step={0.01}
             value={isMuted ? 0 : volume}
             onChange={handleVolumeChange}
-            className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-purple-400 group-hover:h-1.5 transition-all"
+            className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#9b7bff] group-hover:h-1.5 transition-all"
           />
         </div>
 

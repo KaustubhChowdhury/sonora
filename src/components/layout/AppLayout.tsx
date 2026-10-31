@@ -1,9 +1,11 @@
 import React, { useEffect } from "react";
+import { AppTitlebar } from "../shell/AppTitlebar";
 import { Sidebar } from "./Sidebar";
 import { MiniPlayer } from "./MiniPlayer";
 import { Inspector } from "./Inspector";
 import { FullPlayer } from "./FullPlayer";
 import { ContextMenu } from "../shared/ContextMenu";
+import { AnimatedPage } from "../../animations/AnimatedPage";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
 import { HomeScreen } from "../../features/home/HomeScreen";
@@ -28,10 +30,9 @@ export const AppLayout: React.FC = () => {
     setVolume,
   } = usePlayerStore();
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts (matching Section 13)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is currently typing in an input or textarea
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -65,6 +66,9 @@ export const AppLayout: React.FC = () => {
         const newVol = Math.max(0, volume - 0.05);
         setVolume(newVol);
         TauriBridge.setVolume(newVol);
+      } else if (e.ctrlKey && e.code === "KeyK") {
+        e.preventDefault();
+        navigate("search");
       } else if (e.ctrlKey && e.code === "KeyQ") {
         e.preventDefault();
         toggleInspector("queue");
@@ -107,12 +111,17 @@ export const AppLayout: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background text-zinc-100 font-sans">
-      {/* Upper Area: Sidebar + Workspace + Inspector */}
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0b0d12] text-zinc-100 font-sans">
+      {/* Custom Windows Titlebar */}
+      <AppTitlebar />
+
+      {/* Upper Area: Sidebar + Main Workspace + Inspector */}
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
         <Sidebar />
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-surface-muted/20">
-          {renderActiveScreen()}
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#141821]/30">
+          <AnimatedPage pageKey={activeRoute}>
+            {renderActiveScreen()}
+          </AnimatedPage>
         </main>
         <Inspector />
       </div>
@@ -128,7 +137,7 @@ export const AppLayout: React.FC = () => {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-surface-elevated/95 border border-purple-500/30 text-white text-xs font-medium shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#1b2230]/95 border border-purple-500/30 text-white text-xs font-medium shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
           {toastMessage}
         </div>
       )}

@@ -1,5 +1,6 @@
 import React from "react";
-import { Play, Pause, MoreHorizontal, Star } from "lucide-react";
+import { motion } from "motion/react";
+import { Play, MoreHorizontal, Star, ExternalLink } from "lucide-react";
 import { Track } from "../../types/music";
 import { usePlayerStore } from "../../stores/playerStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -7,6 +8,8 @@ import { useLibraryStore } from "../../stores/libraryStore";
 import { SourceBadge } from "./SourceBadge";
 import { AudioFormatBadge } from "./AudioFormatBadge";
 import { TauriBridge } from "../../services/tauriBridge";
+import { openYouTubeMusic } from "../../providers/youtube";
+import { openJioSaavn } from "../../providers/jiosaavn";
 
 interface TrackRowProps {
   track: Track;
@@ -26,8 +29,23 @@ export const TrackRow: React.FC<TrackRowProps> = ({
   const isCurrent = currentTrack?.id === track.id;
   const isRowPlaying = isCurrent && isPlaying;
 
-  const handlePlayToggle = (e: React.MouseEvent) => {
+  const handleAction = (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    // Check provider capability
+    if (track.providerId === "youtube") {
+      openYouTubeMusic(`${track.title} ${track.artists.join(" ")}`);
+      showToast(`Opening "${track.title}" in YouTube Music`);
+      return;
+    }
+
+    if (track.providerId === "jiosaavn") {
+      openJioSaavn(`${track.title} ${track.artists.join(" ")}`);
+      showToast(`Opening "${track.title}" in JioSaavn`);
+      return;
+    }
+
+    // Native playback for Local and Jamendo CC
     if (isCurrent) {
       togglePlayPause();
     } else {
@@ -59,22 +77,24 @@ export const TrackRow: React.FC<TrackRowProps> = ({
   };
 
   return (
-    <div
-      onDoubleClick={handlePlayToggle}
+    <motion.div
+      onDoubleClick={handleAction}
       onContextMenu={handleContextMenu}
-      className={`group grid grid-cols-[36px_1fr_1fr_120px_140px_70px] items-center px-3 py-2 rounded-xl text-sm transition-colors cursor-pointer select-none ${
+      whileHover={{ scale: 1.002 }}
+      transition={{ duration: 0.12 }}
+      className={`group grid grid-cols-[36px_1fr_1fr_120px_140px_70px] items-center px-3 py-2 rounded-xl text-sm cursor-pointer select-none border transition-colors ${
         isCurrent
-          ? "bg-purple-500/10 hover:bg-purple-500/15 text-white"
-          : "hover:bg-white/[0.04] text-zinc-300 hover:text-white"
+          ? "bg-purple-500/10 hover:bg-purple-500/15 border-purple-500/20 text-white"
+          : "border-transparent hover:bg-white/[0.04] text-zinc-300 hover:text-white"
       }`}
     >
       {/* Index or Play Button */}
       <div className="flex items-center justify-center">
         {isRowPlaying ? (
-          <div className="flex items-end gap-[2px] h-3.5 w-3.5 cursor-pointer" onClick={handlePlayToggle}>
-            <span className="w-1 bg-purple-400 animate-pulse h-full rounded-sm" />
-            <span className="w-1 bg-purple-400 animate-pulse delay-75 h-2 rounded-sm" />
-            <span className="w-1 bg-purple-400 animate-pulse delay-150 h-3 rounded-sm" />
+          <div className="flex items-end gap-[2px] h-3.5 w-3.5 cursor-pointer" onClick={handleAction}>
+            <span className="w-1 bg-[#9b7bff] animate-pulse h-full rounded-sm" />
+            <span className="w-1 bg-[#9b7bff] animate-pulse delay-75 h-2 rounded-sm" />
+            <span className="w-1 bg-[#9b7bff] animate-pulse delay-150 h-3 rounded-sm" />
           </div>
         ) : (
           <>
@@ -82,10 +102,16 @@ export const TrackRow: React.FC<TrackRowProps> = ({
               {index + 1}
             </span>
             <button
-              onClick={handlePlayToggle}
-              className="hidden group-hover:flex items-center justify-center w-6 h-6 rounded-full bg-white text-zinc-950 shadow hover:scale-105 transition-transform"
+              onClick={handleAction}
+              className="hidden group-hover:flex items-center justify-center w-6 h-6 rounded-full bg-white text-zinc-950 shadow hover:scale-105 active:scale-95 transition-transform"
             >
-              <Play className="w-3 h-3 fill-current ml-0.5" />
+              {track.providerId === "youtube" ? (
+                <ExternalLink className="w-3 h-3 text-red-600" />
+              ) : track.providerId === "jiosaavn" ? (
+                <ExternalLink className="w-3 h-3 text-cyan-600" />
+              ) : (
+                <Play className="w-3 h-3 fill-current ml-0.5" />
+              )}
             </button>
           </>
         )}
@@ -167,6 +193,6 @@ export const TrackRow: React.FC<TrackRowProps> = ({
           <MoreHorizontal className="w-4 h-4" />
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 };

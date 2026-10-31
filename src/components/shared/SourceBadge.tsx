@@ -1,6 +1,7 @@
 import React from "react";
-import { HardDrive, Globe, Server } from "lucide-react";
+import { HardDrive, Globe, Server, Music } from "lucide-react";
 import { SourceKind } from "../../types/music";
+import { YoutubeIcon } from "./ProviderIcons";
 
 interface SourceBadgeProps {
   sourceKind: SourceKind;
@@ -15,6 +16,30 @@ export const SourceBadge: React.FC<SourceBadgeProps> = ({
   attribution,
   className = "",
 }) => {
+  if (providerId === "youtube") {
+    return (
+      <span
+        title="Official YouTube Music connection"
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase bg-red-950/40 text-red-400 border border-red-500/30 ${className}`}
+      >
+        <YoutubeIcon className="w-2.5 h-2.5" />
+        <span>YouTube</span>
+      </span>
+    );
+  }
+
+  if (providerId === "jiosaavn") {
+    return (
+      <span
+        title="JioSaavn Official Service"
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase bg-cyan-950/40 text-cyan-400 border border-cyan-500/30 ${className}`}
+      >
+        <Music className="w-2.5 h-2.5" />
+        <span>JioSaavn</span>
+      </span>
+    );
+  }
+
   if (sourceKind === "personal-server" || providerId === "subsonic") {
     return (
       <span

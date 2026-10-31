@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { AppLayout } from "./components/layout/AppLayout";
+import { AppMotionProvider } from "./animations/MotionProvider";
 import { useLibraryStore } from "./stores/libraryStore";
 import { useAudioStudioStore } from "./stores/audioStudioStore";
 import { usePlayerStore } from "./stores/playerStore";
@@ -8,7 +9,7 @@ import { TauriBridge } from "./services/tauriBridge";
 export const App: React.FC = () => {
   const { setTracks, setFolders } = useLibraryStore();
   const { setDevices } = useAudioStudioStore();
-  const { currentTrack, playTrack, isPlaying, setCurrentTime } = usePlayerStore();
+  const { isPlaying, setCurrentTime } = usePlayerStore();
 
   // Initial startup initialization
   useEffect(() => {
@@ -57,7 +58,11 @@ export const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [isPlaying, setCurrentTime]);
 
-  return <AppLayout />;
+  return (
+    <AppMotionProvider>
+      <AppLayout />
+    </AppMotionProvider>
+  );
 };
 
 export default App;
