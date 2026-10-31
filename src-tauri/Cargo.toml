@@ -1,0 +1,39 @@
+[package]
+name = "sonora"
+version = "0.1.0"
+description = "Sonora - Premium Local-First Music Player"
+authors = ["Sonora Team"]
+license = "MIT"
+repository = ""
+edition = "2021"
+
+[lib]
+name = "sonora_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.1", features = [] }
+
+[dependencies]
+tauri = { version = "2.1", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-log = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+tokio = { version = "1.40", features = ["full"] }
+rusqlite = { version = "0.33", features = ["bundled"] }
+symphonia = { version = "0.5.4", features = ["all"] }
+cpal = "0.15.3"
+lofty = "0.21.1"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+parking_lot = "0.12"
+uuid = { version = "1.10", features = ["v4"] }
+dirs = "5.0"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+crossbeam-channel = "0.5"
+walkdir = "2.5"
+regex = "1.10"
+open = "5.3"
