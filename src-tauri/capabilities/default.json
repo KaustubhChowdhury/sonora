@@ -1,13 +1,37 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions for Sonora",
+  "description": "enables all permissions for Sonora",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
     "dialog:default",
-    "shell:default"
+    "shell:default",
+    "allow-play-track",
+    "allow-pause-playback",
+    "allow-resume-playback",
+    "allow-seek-playback",
+    "allow-stop-playback",
+    "allow-set-volume",
+    "allow-set-output-mode",
+    "allow-set-audio-device",
+    "allow-set-dsp-settings",
+    "allow-get-playback-status",
+    "allow-get-audio-devices",
+    "allow-scan-library-folder",
+    "allow-get-library-tracks",
+    "allow-get-library-folders",
+    "allow-remove-library-folder",
+    "allow-toggle-favourite",
+    "allow-record-play-history",
+    "allow-fetch-lyrics",
+    "allow-search-jamendo",
+    "allow-search-jiosaavn",
+    "allow-search-youtube",
+    "allow-test-subsonic-connection",
+    "allow-search-subsonic",
+    "allow-open-external"
   ]
 }

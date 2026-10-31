@@ -1,3 +1,34 @@
 fn main() {
-  tauri_build::build()
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(
+                tauri_build::AppManifest::new().commands(&[
+                    "play_track",
+                    "pause_playback",
+                    "resume_playback",
+                    "seek_playback",
+                    "stop_playback",
+                    "set_volume",
+                    "set_output_mode",
+                    "set_audio_device",
+                    "set_dsp_settings",
+                    "get_playback_status",
+                    "get_audio_devices",
+                    "scan_library_folder",
+                    "get_library_tracks",
+                    "get_library_folders",
+                    "remove_library_folder",
+                    "toggle_favourite",
+                    "record_play_history",
+                    "fetch_lyrics",
+                    "search_jamendo",
+                    "search_jiosaavn",
+                    "search_youtube",
+                    "test_subsonic_connection",
+                    "search_subsonic",
+                    "open_external",
+                ]),
+            ),
+    )
+    .expect("Failed to build Tauri app manifest");
 }

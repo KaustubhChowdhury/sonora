@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-record-play-history"
+description = "Enables the record_play_history command without any pre-configured scope."
+commands.allow = ["record_play_history"]
+
+[[permission]]
+identifier = "deny-record-play-history"
+description = "Denies the record_play_history command without any pre-configured scope."
+commands.deny = ["record_play_history"]

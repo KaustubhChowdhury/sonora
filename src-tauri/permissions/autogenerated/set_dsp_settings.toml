@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-dsp-settings"
+description = "Enables the set_dsp_settings command without any pre-configured scope."
+commands.allow = ["set_dsp_settings"]
+
+[[permission]]
+identifier = "deny-set-dsp-settings"
+description = "Denies the set_dsp_settings command without any pre-configured scope."
+commands.deny = ["set_dsp_settings"]

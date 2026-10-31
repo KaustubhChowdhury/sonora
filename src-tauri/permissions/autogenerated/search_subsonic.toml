@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-search-subsonic"
+description = "Enables the search_subsonic command without any pre-configured scope."
+commands.allow = ["search_subsonic"]
+
+[[permission]]
+identifier = "deny-search-subsonic"
+description = "Denies the search_subsonic command without any pre-configured scope."
+commands.deny = ["search_subsonic"]

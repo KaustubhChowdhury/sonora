@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-search-jamendo"
+description = "Enables the search_jamendo command without any pre-configured scope."
+commands.allow = ["search_jamendo"]
+
+[[permission]]
+identifier = "deny-search-jamendo"
+description = "Denies the search_jamendo command without any pre-configured scope."
+commands.deny = ["search_jamendo"]
