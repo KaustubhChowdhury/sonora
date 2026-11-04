@@ -9,9 +9,72 @@ class AudioEngineService {
   private ytIframe: HTMLIFrameElement | null = null;
   private ytPollTimer: any = null;
 
+  // Web Audio Booster Nodes
+  private audioCtx: AudioContext | null = null;
+  private sourceNode: MediaElementAudioSourceNode | null = null;
+  private bassBoostNode: BiquadFilterNode | null = null;
+  private clarityNode: BiquadFilterNode | null = null;
+  private boosterGainNode: GainNode | null = null;
+  private limiterNode: DynamicsCompressorNode | null = null;
+
   constructor() {
     if (typeof window !== "undefined") {
       this.initAudioElement();
+    }
+  }
+
+  private initWebAudio() {
+    if (this.audioCtx || !this.audio) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      this.audioCtx = new AudioCtx();
+      this.sourceNode = this.audioCtx.createMediaElementSource(this.audio);
+
+      this.bassBoostNode = this.audioCtx.createBiquadFilter();
+      this.bassBoostNode.type = "lowshelf";
+      this.bassBoostNode.frequency.value = 90;
+      this.bassBoostNode.gain.value = 0;
+
+      this.clarityNode = this.audioCtx.createBiquadFilter();
+      this.clarityNode.type = "highshelf";
+      this.clarityNode.frequency.value = 6000;
+      this.clarityNode.gain.value = 0;
+
+      this.boosterGainNode = this.audioCtx.createGain();
+      this.boosterGainNode.gain.value = 1.0;
+
+      this.limiterNode = this.audioCtx.createDynamicsCompressor();
+      this.limiterNode.threshold.value = -1.0;
+      this.limiterNode.knee.value = 4.0;
+      this.limiterNode.ratio.value = 20.0;
+      this.limiterNode.attack.value = 0.002;
+      this.limiterNode.release.value = 0.1;
+
+      this.sourceNode
+        .connect(this.bassBoostNode)
+        .connect(this.clarityNode)
+        .connect(this.boosterGainNode)
+        .connect(this.limiterNode)
+        .connect(this.audioCtx.destination);
+    } catch (err) {
+      console.warn("Web Audio API initialization note:", err);
+    }
+  }
+
+  public updateBooster(enabled: boolean, preampDb: number, bassDb: number, clarityDb: number) {
+    this.initWebAudio();
+    if (this.audioCtx && this.audioCtx.state === "suspended") {
+      this.audioCtx.resume();
+    }
+    if (this.bassBoostNode) {
+      this.bassBoostNode.gain.value = enabled ? bassDb : 0;
+    }
+    if (this.clarityNode) {
+      this.clarityNode.gain.value = enabled ? clarityDb : 0;
+    }
+    if (this.boosterGainNode) {
+      const linear = enabled ? Math.pow(10, preampDb / 20) : 1.0;
+      this.boosterGainNode.gain.value = linear;
     }
   }
 
@@ -72,6 +135,10 @@ class AudioEngineService {
   public async playTrack(track: Track) {
     this.currentTrack = track;
     this.initAudioElement();
+    this.initWebAudio();
+    if (this.audioCtx && this.audioCtx.state === "suspended") {
+      this.audioCtx.resume().catch(console.warn);
+    }
 
     // If it's a YouTube track
     if (track.providerId === "youtube" || track.youtubeVideoId) {

@@ -6,7 +6,8 @@ import { Inspector } from "./Inspector";
 import { FullPlayer } from "./FullPlayer";
 import { ContextMenu } from "../shared/ContextMenu";
 import { YouTubeHost } from "../player/YouTubeHost";
-import { FloatingIslandNav } from "../navigation/FloatingIslandNav";
+import { TopMusicNavBar } from "../navigation/TopMusicNavBar";
+import { AudioBoosterModal } from "../audio/AudioBoosterModal";
 import { AnimatedPage } from "../../animations/AnimatedPage";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
@@ -123,10 +124,13 @@ export const AppLayout: React.FC = () => {
       {/* Custom Windows Titlebar */}
       <AppTitlebar />
 
+      {/* Floating Top Music & Sixfold Navigation Bar */}
+      <TopMusicNavBar />
+
       {/* Upper Area: Sidebar + Main Workspace + Inspector */}
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
         {sidebarOpen && <Sidebar />}
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#141821]/30">
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#141821]/30 pt-16">
           <AnimatedPage pageKey={activeRoute}>
             {renderActiveScreen()}
           </AnimatedPage>
@@ -134,24 +138,21 @@ export const AppLayout: React.FC = () => {
         <Inspector />
       </div>
 
-      {/* Floating Island Navigation Dock (CollectUI Pill Design) */}
-      <FloatingIslandNav />
-
-      {/* Persistent Mini-Player Bottom Bar */}
-      <MiniPlayer />
-
       {/* Expanded Full-Screen Player Modal */}
       <FullPlayer />
 
       {/* Embedded YouTube Picture-in-Picture / Audio Host */}
       <YouTubeHost />
 
+      {/* Audio Booster Control Panel */}
+      <AudioBoosterModal />
+
       {/* Floating Context Menu */}
       <ContextMenu />
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#1b2230]/95 border border-purple-500/30 text-white text-xs font-medium shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#1b2230]/95 border border-purple-500/30 text-white text-xs font-medium shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
           {toastMessage}
         </div>
       )}
