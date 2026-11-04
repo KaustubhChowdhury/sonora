@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { Track, AudioOutputStatus } from "../types/music";
 import { AudioEngine } from "../services/audioEngine";
+import { useLibraryStore } from "./libraryStore";
 
 interface PlayerState {
   currentTrack: Track | null;
@@ -88,6 +89,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentTimeMs: 0,
       durationMs: track.durationMs || 180000,
     });
+
+    try {
+      useLibraryStore.getState().recordTrackPlayed(track);
+    } catch (e) {
+      console.warn("Record track played note:", e);
+    }
 
     AudioEngine.playTrack(track);
   },

@@ -40,9 +40,11 @@ interface UiState {
   
   contextMenu: ContextMenuState;
   toastMessage: string | null;
+  globalSearchQuery: string;
 
   // Actions
   navigate: (route: AppRoute, params?: { albumId?: string; artistId?: string; playlistId?: string }) => void;
+  setGlobalSearchQuery: (q: string) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   toggleInspector: (tab?: InspectorTab) => void;
@@ -78,6 +80,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     track: null,
   },
   toastMessage: null,
+  globalSearchQuery: "",
 
   navigate: (route, params) => {
     set({
@@ -86,6 +89,10 @@ export const useUiStore = create<UiState>((set, get) => ({
       selectedArtistId: params?.artistId ?? null,
       selectedPlaylistId: params?.playlistId ?? null,
     });
+  },
+
+  setGlobalSearchQuery: (globalSearchQuery: string) => {
+    set({ globalSearchQuery });
   },
 
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),

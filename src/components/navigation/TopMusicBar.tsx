@@ -53,26 +53,36 @@ export const TopMusicBar: React.FC = () => {
     }
   }, []);
 
-  const handleMinimize = () => {
-    if (isTauri()) getCurrentWindow().minimize();
-  };
-
-  const handleMaximizeToggle = async () => {
-    if (isTauri()) {
+  const handleMinimize = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
       const appWindow = getCurrentWindow();
-      const max = await appWindow.isMaximized();
-      if (max) {
-        await appWindow.unmaximize();
-        setIsMaximized(false);
-      } else {
-        await appWindow.maximize();
-        setIsMaximized(true);
-      }
+      await appWindow.minimize();
+    } catch (err) {
+      console.error("Minimize error:", err);
     }
   };
 
-  const handleClose = () => {
-    if (isTauri()) getCurrentWindow().close();
+  const handleMaximizeToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const appWindow = getCurrentWindow();
+      await appWindow.toggleMaximize();
+      const max = await appWindow.isMaximized();
+      setIsMaximized(max);
+    } catch (err) {
+      console.error("Maximize error:", err);
+    }
+  };
+
+  const handleClose = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const appWindow = getCurrentWindow();
+      await appWindow.close();
+    } catch (err) {
+      console.error("Close error:", err);
+    }
   };
 
   const formatTime = (ms: number) => {
@@ -111,14 +121,11 @@ export const TopMusicBar: React.FC = () => {
   }, [showVolumeSlider]);
 
   return (
-    <header
-      data-tauri-drag-region
-      className="h-14 w-full bg-[#0d0f15]/95 backdrop-blur-2xl border-b border-white/[0.08] flex items-center justify-between px-3.5 select-none z-50 shrink-0 shadow-lg shadow-black/40"
-    >
+    <header className="h-14 w-full bg-[#0d0f15]/95 backdrop-blur-2xl border-b border-white/[0.08] flex items-center justify-between px-3.5 select-none z-50 shrink-0 shadow-lg shadow-black/40 relative">
       {/* LEFT: Track Info (Now Playing) */}
       <div
-        data-tauri-drag-region
-        className="flex items-center gap-3 min-w-[220px] max-w-[320px] cursor-pointer group"
+        style={{ WebkitAppRegion: "no-drag" } as any}
+        className="flex items-center gap-3 min-w-[220px] max-w-[320px] cursor-pointer group z-10"
         onClick={() => setFullPlayerOpen(true)}
       >
         <div className="relative w-9 h-9 rounded-xl overflow-hidden bg-zinc-800 border border-white/10 shrink-0 shadow-sm">
@@ -165,8 +172,11 @@ export const TopMusicBar: React.FC = () => {
         </div>
       </div>
 
+      {/* Drag Region Spacer */}
+      <div data-tauri-drag-region className="flex-1 h-full cursor-move min-w-[20px]" />
+
       {/* CENTER: Music Transport & Timeline Scrubber */}
-      <div className="flex items-center gap-4 flex-1 max-w-xl justify-center px-4">
+      <div style={{ WebkitAppRegion: "no-drag" } as any} className="flex items-center gap-4 flex-1 max-w-xl justify-center px-4 z-10">
         {/* Controls */}
         <div className="flex items-center gap-1.5">
           <button
@@ -221,8 +231,11 @@ export const TopMusicBar: React.FC = () => {
         </div>
       </div>
 
+      {/* Drag Region Spacer */}
+      <div data-tauri-drag-region className="flex-1 h-full cursor-move min-w-[20px]" />
+
       {/* RIGHT: Super Audio Booster + Volume + Queue + Window Controls */}
-      <div className="flex items-center gap-2">
+      <div style={{ WebkitAppRegion: "no-drag" } as any} className="flex items-center gap-2 z-10">
         {/* Super Audio Booster Button */}
         <button
           onClick={() => setBoosterModalOpen(true)}
@@ -308,25 +321,25 @@ export const TopMusicBar: React.FC = () => {
         <div className="w-[1px] h-5 bg-white/10 mx-1" />
 
         {/* Native Windows Caption Buttons */}
-        <div className="flex items-center">
+        <div style={{ WebkitAppRegion: "no-drag" } as any} className="flex items-center ml-1">
           <button
             onClick={handleMinimize}
             title="Minimize"
-            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors rounded"
+            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors rounded cursor-pointer active:scale-95"
           >
             <Minus className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={handleMaximizeToggle}
             title={isMaximized ? "Restore Down" : "Maximize"}
-            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors rounded"
+            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors rounded cursor-pointer active:scale-95"
           >
             <Square className="w-3 h-3" />
           </button>
           <button
             onClick={handleClose}
             title="Close"
-            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-rose-600 transition-colors rounded"
+            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-rose-600 transition-colors rounded cursor-pointer active:scale-95"
           >
             <X className="w-3.5 h-3.5" />
           </button>

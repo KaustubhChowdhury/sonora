@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Home,
@@ -6,7 +6,7 @@ import {
   Music,
   Sliders,
   LayoutGrid,
-  Compass,
+  X,
 } from "lucide-react";
 import { YoutubeIcon } from "../shared/ProviderIcons";
 import { useUiStore, AppRoute } from "../../stores/uiStore";
@@ -28,8 +28,33 @@ const MENU_ITEMS: BottomMenuItem[] = [
 ];
 
 export const BottomMenu: React.FC = () => {
-  const { activeRoute, navigate, sidebarOpen, toggleSidebar } = useUiStore();
+  const {
+    activeRoute,
+    navigate,
+    sidebarOpen,
+    toggleSidebar,
+    globalSearchQuery,
+    setGlobalSearchQuery,
+  } = useUiStore();
+
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // When search becomes active, focus the input
+  useEffect(() => {
+    if (activeRoute === "search" && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [activeRoute]);
+
+  const handleSearchClick = () => {
+    if (activeRoute !== "search") {
+      navigate("search");
+    }
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 50);
+  };
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 pointer-events-none select-none">
@@ -44,9 +69,41 @@ export const BottomMenu: React.FC = () => {
           const isActive = item.isDrawer ? sidebarOpen : activeRoute === item.id;
           const isHovered = hoveredItem === item.id;
 
+          // SPECIAL: When Search is active, render the expandable interactive search input
+          if (item.id === "search" && isActive) {
+            return (
+              <motion.div
+                key="search-interactive"
+                initial={{ width: 44, opacity: 0.8 }}
+                animate={{ width: "auto", opacity: 1 }}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#b4ff39] text-[#111216] shadow-lg shadow-[#b4ff39]/35 font-sans"
+              >
+                <Search className="w-4 h-4 stroke-[2.5] text-[#111216] shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search songs, artists, mixes..."
+                  value={globalSearchQuery}
+                  onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                  className="bg-transparent text-[#111216] placeholder-[#111216]/60 font-black text-xs focus:outline-none w-44 sm:w-56 tracking-tight select-text"
+                />
+                {globalSearchQuery && (
+                  <button
+                    onClick={() => setGlobalSearchQuery("")}
+                    className="w-4 h-4 rounded-full bg-black/15 hover:bg-black/30 flex items-center justify-center text-[#111216] transition-colors"
+                  >
+                    <X className="w-2.5 h-2.5 stroke-[3]" />
+                  </button>
+                )}
+              </motion.div>
+            );
+          }
+
           const handleClick = () => {
             if (item.isDrawer) {
               toggleSidebar();
+            } else if (item.id === "search") {
+              handleSearchClick();
             } else {
               navigate(item.id as AppRoute);
             }
@@ -59,7 +116,7 @@ export const BottomMenu: React.FC = () => {
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              {/* Floating Tooltip Pill with Neon-Lime Arrow Pointer */}
+              {/* Floating Tooltip Pill with Neon-Lime Caret Pointer */}
               <AnimatePresence>
                 {isHovered && !isActive && (
                   <motion.div
@@ -78,7 +135,7 @@ export const BottomMenu: React.FC = () => {
 
               <button
                 onClick={handleClick}
-                className={`relative flex items-center gap-2 transition-all duration-200 ${
+                className={`relative flex items-center gap-2 transition-all duration-200 cursor-pointer ${
                   isActive
                     ? "px-5 py-2.5 rounded-full bg-[#b4ff39] text-[#111216] font-black text-xs shadow-lg shadow-[#b4ff39]/35"
                     : "w-10 h-10 rounded-full bg-[#171922]/90 hover:bg-[#232635] text-zinc-400 hover:text-white justify-center border border-white/[0.06] hover:scale-105 active:scale-95"
