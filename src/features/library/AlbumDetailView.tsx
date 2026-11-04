@@ -38,7 +38,7 @@ export const AlbumDetailView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto p-8 space-y-6 select-none">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto p-8 space-y-6 select-none pb-48">
       {/* Back button */}
       <button
         onClick={() => navigate("library")}

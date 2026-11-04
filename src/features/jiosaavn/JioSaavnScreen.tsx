@@ -146,7 +146,7 @@ export const JioSaavnScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 space-y-8 select-none">
+    <div className="flex-1 overflow-y-auto p-8 space-y-8 select-none pb-48">
       {/* Header & JioSaavn Search Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

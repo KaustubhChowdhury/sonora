@@ -57,12 +57,12 @@ export const BottomMenu: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 pointer-events-none select-none">
+    <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-40 pointer-events-none select-none">
       <motion.nav
         initial={{ y: 30, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         transition={{ type: "spring", stiffness: 380, damping: 26 }}
-        className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-full bg-[#0e1017]/95 backdrop-blur-2xl border border-white/[0.14] shadow-[0_20px_50px_rgba(0,0,0,0.85)]"
+        className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-full bg-[#13151f]/80 backdrop-blur-2xl border border-white/20 shadow-[0_25px_60px_-10px_rgba(0,0,0,0.95),0_0_20px_rgba(180,255,57,0.12)] ring-1 ring-white/10"
       >
         {MENU_ITEMS.map((item) => {
           const Icon = item.icon;

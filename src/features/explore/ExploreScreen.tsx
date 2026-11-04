@@ -109,7 +109,7 @@ export const ExploreScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 space-y-8 select-none max-w-5xl">
+    <div className="flex-1 overflow-y-auto p-8 space-y-8 select-none max-w-5xl pb-48">
       {/* Header */}
       <div className="flex items-center justify-between pb-6 border-b border-white/[0.06]">
         <div>

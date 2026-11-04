@@ -126,7 +126,7 @@ export const AppLayout: React.FC = () => {
       {/* Workspace: Sidebar + Main Content Screen + Inspector */}
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
         {sidebarOpen && <Sidebar />}
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#141821]/30 pb-20">
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#141821]/30">
           <AnimatedPage pageKey={activeRoute}>
             {renderActiveScreen()}
           </AnimatedPage>

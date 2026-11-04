@@ -88,7 +88,7 @@ export const SettingsScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 space-y-8 select-none max-w-4xl">
+    <div className="flex-1 overflow-y-auto p-8 space-y-8 select-none max-w-4xl pb-48">
       {/* Title */}
       <div className="pb-4 border-b border-white/[0.06]">
         <h1 className="text-2xl font-bold text-white tracking-tight">Settings</h1>

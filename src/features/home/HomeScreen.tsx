@@ -235,7 +235,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-9 select-none pb-32">
+    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-9 select-none pb-48">
       {/* 1. TOP HEADER & PERSONALIZED GREETING */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

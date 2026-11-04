@@ -31,7 +31,7 @@ export const ArtistDetailView: React.FC = () => {
   const artistAlbums = albums.filter((al) => al.artist === artist.name);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto p-8 space-y-8 select-none">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto p-8 space-y-8 select-none pb-48">
       {/* Back button */}
       <button
         onClick={() => navigate("library")}

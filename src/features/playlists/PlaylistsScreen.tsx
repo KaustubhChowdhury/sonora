@@ -75,7 +75,7 @@ export const PlaylistsScreen: React.FC = () => {
       </div>
 
       {/* Playlist Content View */}
-      <div className="flex-1 overflow-y-auto p-8 space-y-6">
+      <div className="flex-1 overflow-y-auto p-8 space-y-6 pb-48">
         {activePlaylist ? (
           <>
             {/* Header */}

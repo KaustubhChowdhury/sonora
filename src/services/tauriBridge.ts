@@ -1,8 +1,13 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri as isTauriCore } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Track, SourceKind, AudioDevice, AudioOutputStatus, DspSettings, LyricsData, FolderScanStatus } from "../types/music";
 
 export const isTauri = () => {
-  return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+  try {
+    return isTauriCore();
+  } catch {
+    return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+  }
 };
 
 // Initial built-in audiophile demo catalogue for immediate testing and listening
@@ -520,5 +525,47 @@ export class TauriBridge {
     } else {
       window.open(url, "_blank");
     }
+  }
+
+  static async minimizeWindow(): Promise<void> {
+    if (isTauri()) {
+      try {
+        await getCurrentWindow().minimize();
+      } catch (err) {
+        console.error("Minimize error:", err);
+      }
+    }
+  }
+
+  static async toggleMaximizeWindow(): Promise<void> {
+    if (isTauri()) {
+      try {
+        await getCurrentWindow().toggleMaximize();
+      } catch (err) {
+        console.error("Toggle maximize error:", err);
+      }
+    }
+  }
+
+  static async closeWindow(): Promise<void> {
+    if (isTauri()) {
+      try {
+        await getCurrentWindow().close();
+      } catch (err) {
+        console.error("Close error:", err);
+      }
+    }
+  }
+
+  static async isWindowMaximized(): Promise<boolean> {
+    if (isTauri()) {
+      try {
+        return await getCurrentWindow().isMaximized();
+      } catch (err) {
+        console.error("isMaximized error:", err);
+        return false;
+      }
+    }
+    return false;
   }
 }

@@ -162,7 +162,7 @@ export const SearchScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-28 select-none">
+    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-48 select-none">
       {/* Top Search Input Bar */}
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="relative flex items-center">

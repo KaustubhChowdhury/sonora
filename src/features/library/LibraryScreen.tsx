@@ -213,7 +213,7 @@ export const LibraryScreen: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex-1 overflow-y-auto p-8 pb-48">
         {/* SONGS / TRACKS VIEW */}
         {(activeView === "songs" || activeView === "favourites") && (
           <div className="space-y-1">

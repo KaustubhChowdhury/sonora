@@ -47,42 +47,48 @@ export const TopMusicBar: React.FC = () => {
   const volumeContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    TauriBridge.isWindowMaximized().then(setIsMaximized);
+
+    // Listen to resize events to keep maximize/restore icon accurately synced
     if (isTauri()) {
-      const appWindow = getCurrentWindow();
-      appWindow.isMaximized().then(setIsMaximized);
+      try {
+        const appWin = getCurrentWindow();
+        appWin.onResized(() => {
+          TauriBridge.isWindowMaximized().then(setIsMaximized);
+        }).then((fn) => {
+          unlisten = fn;
+        }).catch(() => {});
+      } catch (e) {
+        console.warn("Window resize listener error:", e);
+      }
     }
+
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
   const handleMinimize = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      const appWindow = getCurrentWindow();
-      await appWindow.minimize();
-    } catch (err) {
-      console.error("Minimize error:", err);
-    }
+    e.preventDefault();
+    await TauriBridge.minimizeWindow();
   };
 
-  const handleMaximizeToggle = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const appWindow = getCurrentWindow();
-      await appWindow.toggleMaximize();
-      const max = await appWindow.isMaximized();
-      setIsMaximized(max);
-    } catch (err) {
-      console.error("Maximize error:", err);
+  const handleMaximizeToggle = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
     }
+    await TauriBridge.toggleMaximizeWindow();
+    const max = await TauriBridge.isWindowMaximized();
+    setIsMaximized(max);
   };
 
   const handleClose = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      const appWindow = getCurrentWindow();
-      await appWindow.close();
-    } catch (err) {
-      console.error("Close error:", err);
-    }
+    e.preventDefault();
+    await TauriBridge.closeWindow();
   };
 
   const formatTime = (ms: number) => {
@@ -173,7 +179,11 @@ export const TopMusicBar: React.FC = () => {
       </div>
 
       {/* Drag Region Spacer */}
-      <div data-tauri-drag-region className="flex-1 h-full cursor-move min-w-[20px]" />
+      <div
+        data-tauri-drag-region
+        onDoubleClick={() => handleMaximizeToggle()}
+        className="flex-1 h-full cursor-move min-w-[20px]"
+      />
 
       {/* CENTER: Music Transport & Timeline Scrubber */}
       <div style={{ WebkitAppRegion: "no-drag" } as any} className="flex items-center gap-4 flex-1 max-w-xl justify-center px-4 z-10">
@@ -232,7 +242,11 @@ export const TopMusicBar: React.FC = () => {
       </div>
 
       {/* Drag Region Spacer */}
-      <div data-tauri-drag-region className="flex-1 h-full cursor-move min-w-[20px]" />
+      <div
+        data-tauri-drag-region
+        onDoubleClick={() => handleMaximizeToggle()}
+        className="flex-1 h-full cursor-move min-w-[20px]"
+      />
 
       {/* RIGHT: Super Audio Booster + Volume + Queue + Window Controls */}
       <div style={{ WebkitAppRegion: "no-drag" } as any} className="flex items-center gap-2 z-10">
@@ -321,27 +335,47 @@ export const TopMusicBar: React.FC = () => {
         <div className="w-[1px] h-5 bg-white/10 mx-1" />
 
         {/* Native Windows Caption Buttons */}
-        <div style={{ WebkitAppRegion: "no-drag" } as any} className="flex items-center ml-1">
+        <div
+          data-tauri-drag-region="false"
+          style={{ WebkitAppRegion: "no-drag" } as any}
+          className="flex items-center ml-1"
+        >
           <button
+            type="button"
             onClick={handleMinimize}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Minimize"
-            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors rounded cursor-pointer active:scale-95"
+            data-tauri-drag-region="false"
+            className="w-9 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors rounded cursor-pointer active:scale-95"
           >
-            <Minus className="w-3.5 h-3.5" />
+            <Minus className="w-3.5 h-3.5 stroke-[2]" />
           </button>
           <button
+            type="button"
             onClick={handleMaximizeToggle}
+            onMouseDown={(e) => e.stopPropagation()}
             title={isMaximized ? "Restore Down" : "Maximize"}
-            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors rounded cursor-pointer active:scale-95"
+            data-tauri-drag-region="false"
+            className="w-9 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors rounded cursor-pointer active:scale-95"
           >
-            <Square className="w-3 h-3" />
+            {isMaximized ? (
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75">
+                <rect x="4.5" y="1.5" width="10" height="10" rx="1" />
+                <path d="M1.5 5.5v9a1 1 0 0 0 1 1h9" />
+              </svg>
+            ) : (
+              <Square className="w-3 h-3 stroke-[2]" />
+            )}
           </button>
           <button
+            type="button"
             onClick={handleClose}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Close"
-            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-rose-600 transition-colors rounded cursor-pointer active:scale-95"
+            data-tauri-drag-region="false"
+            className="w-9 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#e81123] transition-colors rounded cursor-pointer active:scale-95"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5 stroke-[2]" />
           </button>
         </div>
       </div>
