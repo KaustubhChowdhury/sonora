@@ -494,13 +494,21 @@ export const HomeScreen: React.FC = () => {
               </span>
             </div>
 
-            <button
-              onClick={() => handlePlayCollection(jiosaavnTrending, "JioSaavn Weekly Top")}
-              className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1"
-            >
-              <Play className="w-3 h-3 fill-current ml-0.5" />
-              <span>Play All ({jiosaavnTrending.length})</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePlayCollection(jiosaavnTrending, "JioSaavn Weekly Top")}
+                className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1"
+              >
+                <Play className="w-3 h-3 fill-current ml-0.5" />
+                <span>Play All ({jiosaavnTrending.length})</span>
+              </button>
+              <button
+                onClick={() => navigate("jiosaavn")}
+                className="text-xs px-2.5 py-1 rounded-full bg-cyan-950/60 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-colors font-medium"
+              >
+                Explore Hub →
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -565,13 +573,21 @@ export const HomeScreen: React.FC = () => {
               </span>
             </div>
 
-            <button
-              onClick={() => handlePlayCollection(youtubeTrending, "YouTube Viral")}
-              className="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
-            >
-              <Play className="w-3 h-3 fill-current ml-0.5" />
-              <span>Play All ({youtubeTrending.length})</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePlayCollection(youtubeTrending, "YouTube Viral")}
+                className="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
+              >
+                <Play className="w-3 h-3 fill-current ml-0.5" />
+                <span>Play All ({youtubeTrending.length})</span>
+              </button>
+              <button
+                onClick={() => navigate("youtube")}
+                className="text-xs px-2.5 py-1 rounded-full bg-red-950/60 hover:bg-red-500/20 text-red-300 border border-red-500/30 transition-colors font-medium"
+              >
+                Explore Hub →
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

@@ -10,6 +10,8 @@ import { AnimatedPage } from "../../animations/AnimatedPage";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
 import { HomeScreen } from "../../features/home/HomeScreen";
+import { JioSaavnScreen } from "../../features/jiosaavn/JioSaavnScreen";
+import { YouTubeScreen } from "../../features/youtube/YouTubeScreen";
 import { LibraryScreen } from "../../features/library/LibraryScreen";
 import { AlbumDetailView } from "../../features/library/AlbumDetailView";
 import { ArtistDetailView } from "../../features/library/ArtistDetailView";
@@ -90,6 +92,10 @@ export const AppLayout: React.FC = () => {
     switch (activeRoute) {
       case "home":
         return <HomeScreen />;
+      case "jiosaavn":
+        return <JioSaavnScreen />;
+      case "youtube":
+        return <YouTubeScreen />;
       case "library":
         return <LibraryScreen />;
       case "album-detail":

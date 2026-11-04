@@ -4,6 +4,8 @@ import { Track } from "../types/music";
 export type AppRoute =
   | "home"
   | "search"
+  | "jiosaavn"
+  | "youtube"
   | "library"
   | "album-detail"
   | "artist-detail"
