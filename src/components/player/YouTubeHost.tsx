@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { usePlayerStore } from "../../stores/playerStore";
 import { AudioEngine } from "../../services/audioEngine";
 import { YoutubeIcon } from "../shared/ProviderIcons";
-import { Maximize2, Minimize2, X } from "lucide-react";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 export const YouTubeHost: React.FC = () => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -18,22 +18,14 @@ export const YouTubeHost: React.FC = () => {
     }
   }, []);
 
-  if (!isYouTubeActive) {
-    return (
-      <iframe
-        ref={iframeRef}
-        id="sonora-yt-host"
-        className="hidden"
-        title="YouTube Audio Engine"
-        allow="autoplay; encrypted-media"
-      />
-    );
-  }
-
   return (
     <div
       className={`fixed bottom-24 right-6 z-40 bg-[#141821] border border-red-500/30 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 flex flex-col ${
-        isMinimized ? "w-64 h-12" : "w-80 h-52"
+        !isYouTubeActive
+          ? "pointer-events-none opacity-0 -bottom-96 w-64 h-36"
+          : isMinimized
+          ? "w-72 h-14"
+          : "w-80 h-52"
       }`}
     >
       {/* Header bar */}
@@ -62,7 +54,7 @@ export const YouTubeHost: React.FC = () => {
           id="sonora-yt-host"
           className="w-full h-full border-0"
           title="YouTube Music Player"
-          allow="autoplay; encrypted-media"
+          allow="autoplay; encrypted-media; picture-in-picture"
         />
       </div>
     </div>

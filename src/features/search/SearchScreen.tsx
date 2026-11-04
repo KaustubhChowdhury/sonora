@@ -4,9 +4,10 @@ import {
   Globe,
   HardDrive,
   Music,
-  ExternalLink,
   Play,
   Loader2,
+  Sparkles,
+  ListPlus,
 } from "lucide-react";
 import { YoutubeIcon } from "../../components/shared/ProviderIcons";
 import { useLibraryStore } from "../../stores/libraryStore";
@@ -15,12 +16,24 @@ import { useUiStore } from "../../stores/uiStore";
 import { Track } from "../../types/music";
 import { TrackRow } from "../../components/shared/TrackRow";
 import { TauriBridge } from "../../services/tauriBridge";
-import { openYouTubeMusic } from "../../providers/youtube";
-import { openJioSaavn } from "../../providers/jiosaavn";
+
+const POPULAR_SEARCH_TAGS = [
+  "Phonk",
+  "Arijit Singh",
+  "Late Night Lo-Fi",
+  "The Weeknd",
+  "Diljit Dosanjh",
+  "Drift Phonk",
+  "Karan Aujla",
+  "Bollywood Hits",
+  "Synthwave",
+  "Anirudh",
+  "Bass Boosted",
+];
 
 export const SearchScreen: React.FC = () => {
   const { tracks } = useLibraryStore();
-  const { playTrack } = usePlayerStore();
+  const { playTrack, addToQueue } = usePlayerStore();
   const { showToast } = useUiStore();
 
   const [query, setQuery] = useState("");
@@ -58,8 +71,8 @@ export const SearchScreen: React.FC = () => {
     setIsSearchingOnline(true);
     try {
       const [jioRes, ytRes, jamRes] = await Promise.allSettled([
-        TauriBridge.searchJioSaavn(q, 15),
-        TauriBridge.searchYouTube(q, 15),
+        TauriBridge.searchJioSaavn(q, 20),
+        TauriBridge.searchYouTube(q, 20),
         TauriBridge.searchJamendo(q, 10),
       ]);
 
@@ -86,7 +99,7 @@ export const SearchScreen: React.FC = () => {
     if (query.trim().length >= 2) {
       debounceTimerRef.current = setTimeout(() => {
         executeLiveSearch(query);
-      }, 350);
+      }, 300);
     } else {
       setJiosaavnResults([]);
       setYoutubeResults([]);
@@ -105,14 +118,15 @@ export const SearchScreen: React.FC = () => {
     }
   };
 
-  const handleOpenExternal = (provider: "youtube" | "jiosaavn") => {
-    if (provider === "youtube") {
-      openYouTubeMusic(query);
-      showToast(`Opening YouTube Music for "${query}"`);
-    } else {
-      openJioSaavn(query);
-      showToast(`Opening JioSaavn for "${query}"`);
-    }
+  const handleTagClick = (tag: string) => {
+    setQuery(tag);
+    executeLiveSearch(tag);
+  };
+
+  const handlePlayAll = (items: Track[], label: string) => {
+    if (items.length === 0) return;
+    playTrack(items[0], items);
+    showToast(`Playing ${items.length} tracks from ${label}`);
   };
 
   const totalResultsCount =
@@ -124,13 +138,13 @@ export const SearchScreen: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden select-none p-8 space-y-6">
       {/* Top Search Field & Provider Tabs */}
-      <div className="max-w-3xl w-full space-y-3">
+      <div className="max-w-4xl w-full space-y-3">
         <div className="relative">
           <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
             autoFocus
-            placeholder="Search songs, artists, JioSaavn 320kbps streams, YouTube Music or local vault..."
+            placeholder="Search songs, artists, JioSaavn 320kbps streams, YouTube Music or local files..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleManualSearch}
@@ -139,6 +153,23 @@ export const SearchScreen: React.FC = () => {
           {isSearchingOnline && (
             <Loader2 className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-purple-400 animate-spin" />
           )}
+        </div>
+
+        {/* Quick Suggestion Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+          <span className="text-zinc-500 text-[11px] font-medium mr-1 shrink-0 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-purple-400" />
+            Quick:
+          </span>
+          {POPULAR_SEARCH_TAGS.map((tag) => (
+            <button
+              key={tag}
+              onClick={() => handleTagClick(tag)}
+              className="px-2.5 py-1 rounded-full bg-white/[0.05] hover:bg-purple-500/20 hover:text-purple-300 hover:border-purple-500/40 border border-white/[0.08] text-zinc-400 text-xs transition-all whitespace-nowrap shrink-0"
+            >
+              {tag}
+            </button>
+          ))}
         </div>
 
         {/* Provenance Tabs */}
@@ -227,37 +258,42 @@ export const SearchScreen: React.FC = () => {
       {/* Results View */}
       <div className="flex-1 overflow-y-auto space-y-6 pr-2">
         {!query.trim() ? (
-          <div className="h-64 flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-zinc-500">
-              <Search className="w-6 h-6" />
+          <div className="h-64 flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shadow-xl">
+              <Search className="w-7 h-7" />
             </div>
-            <h3 className="font-semibold text-zinc-200">Unified Music Discovery</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Type any song, artist, or genre to search and play straight from JioSaavn 320kbps streams, YouTube Music, or your local lossless vault.
-            </p>
+            <div>
+              <h3 className="font-bold text-base text-zinc-100">Live Streaming & Local Search</h3>
+              <p className="text-xs text-zinc-400 leading-relaxed mt-1">
+                Type any song, artist, album, or click a quick suggestion above to play immediately in 320kbps Master AAC from JioSaavn or YouTube Music.
+              </p>
+            </div>
           </div>
         ) : (
           <>
             {/* JIOSAAVN RESULTS */}
             {(activeTab === "all" || activeTab === "jiosaavn") && (
               <section className="space-y-3 bg-[#141821]/40 p-4 rounded-2xl border border-cyan-500/20">
-                <div className="flex items-center justify-between pb-1 border-b border-white/[0.06]">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
                   <div className="flex items-center gap-2">
                     <Music className="w-4 h-4 text-cyan-400" />
                     <h2 className="text-xs font-bold text-white uppercase tracking-wider">
                       JioSaavn Music ({jiosaavnResults.length})
                     </h2>
-                    <span className="text-[10px] text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-500/30">
+                    <span className="text-[10px] text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-500/30 font-medium">
                       320kbps AAC Playable
                     </span>
                   </div>
-                  <button
-                    onClick={() => handleOpenExternal("jiosaavn")}
-                    className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 font-medium"
-                  >
-                    <span>JioSaavn.com</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+
+                  {jiosaavnResults.length > 0 && (
+                    <button
+                      onClick={() => handlePlayAll(jiosaavnResults, "JioSaavn")}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-xs font-medium transition-all"
+                    >
+                      <Play className="w-3 h-3 fill-current ml-0.5" />
+                      <span>Play All</span>
+                    </button>
+                  )}
                 </div>
 
                 {jiosaavnResults.length > 0 ? (
@@ -269,7 +305,7 @@ export const SearchScreen: React.FC = () => {
                 ) : isSearchingOnline ? (
                   <div className="flex items-center gap-2 py-4 text-xs text-cyan-400">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Searching JioSaavn high-fidelity catalogue...</span>
+                    <span>Searching JioSaavn 320kbps catalogue...</span>
                   </div>
                 ) : (
                   <p className="text-xs text-zinc-500 italic py-2">
@@ -282,23 +318,26 @@ export const SearchScreen: React.FC = () => {
             {/* YOUTUBE RESULTS */}
             {(activeTab === "all" || activeTab === "youtube") && (
               <section className="space-y-3 bg-[#141821]/40 p-4 rounded-2xl border border-red-500/20">
-                <div className="flex items-center justify-between pb-1 border-b border-white/[0.06]">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
                   <div className="flex items-center gap-2">
                     <YoutubeIcon className="w-4 h-4 text-red-500" />
                     <h2 className="text-xs font-bold text-white uppercase tracking-wider">
                       YouTube Music ({youtubeResults.length})
                     </h2>
-                    <span className="text-[10px] text-red-400 bg-red-950/60 px-2 py-0.5 rounded-full border border-red-500/30">
+                    <span className="text-[10px] text-red-400 bg-red-950/60 px-2 py-0.5 rounded-full border border-red-500/30 font-medium">
                       In-App Player
                     </span>
                   </div>
-                  <button
-                    onClick={() => handleOpenExternal("youtube")}
-                    className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-medium"
-                  >
-                    <span>YouTube Music</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+
+                  {youtubeResults.length > 0 && (
+                    <button
+                      onClick={() => handlePlayAll(youtubeResults, "YouTube Music")}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-xs font-medium transition-all"
+                    >
+                      <Play className="w-3 h-3 fill-current ml-0.5" />
+                      <span>Play All</span>
+                    </button>
+                  )}
                 </div>
 
                 {youtubeResults.length > 0 ? (
@@ -323,13 +362,23 @@ export const SearchScreen: React.FC = () => {
             {/* LOCAL VAULT RESULTS */}
             {(activeTab === "all" || activeTab === "local") && (
               <section className="space-y-3 bg-[#141821]/40 p-4 rounded-2xl border border-white/[0.06]">
-                <div className="flex items-center justify-between pb-1 border-b border-white/[0.06]">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
                   <div className="flex items-center gap-2">
                     <HardDrive className="w-4 h-4 text-purple-400" />
                     <h2 className="text-xs font-bold text-white uppercase tracking-wider">
                       Local Lossless Vault ({localResults.length})
                     </h2>
                   </div>
+
+                  {localResults.length > 0 && (
+                    <button
+                      onClick={() => handlePlayAll(localResults, "Local Vault")}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 text-xs font-medium transition-all"
+                    >
+                      <Play className="w-3 h-3 fill-current ml-0.5" />
+                      <span>Play All</span>
+                    </button>
+                  )}
                 </div>
 
                 {localResults.length > 0 ? (
@@ -354,13 +403,23 @@ export const SearchScreen: React.FC = () => {
             {/* JAMENDO CC RESULTS */}
             {(activeTab === "all" || activeTab === "jamendo") && (
               <section className="space-y-3 bg-[#141821]/40 p-4 rounded-2xl border border-amber-500/20">
-                <div className="flex items-center justify-between pb-1 border-b border-white/[0.06]">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
                   <div className="flex items-center gap-2">
                     <Globe className="w-4 h-4 text-amber-400" />
                     <h2 className="text-xs font-bold text-white uppercase tracking-wider">
                       Jamendo Creative Commons ({onlineJamendoResults.length})
                     </h2>
                   </div>
+
+                  {onlineJamendoResults.length > 0 && (
+                    <button
+                      onClick={() => handlePlayAll(onlineJamendoResults, "Jamendo")}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-medium transition-all"
+                    >
+                      <Play className="w-3 h-3 fill-current ml-0.5" />
+                      <span>Play All</span>
+                    </button>
+                  )}
                 </div>
 
                 {onlineJamendoResults.length > 0 ? (

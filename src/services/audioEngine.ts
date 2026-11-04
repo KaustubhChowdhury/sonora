@@ -40,7 +40,26 @@ class AudioEngineService {
     });
 
     this.audio.addEventListener("error", (e) => {
-      console.warn("Audio element error:", e);
+      console.warn("Audio element playback error:", e);
+      if (this.currentTrack?.streamUrl) {
+        if (this.currentTrack.streamUrl.includes("_320.mp4")) {
+          const fallback = this.currentTrack.streamUrl.replace("_320.mp4", "_160.mp4");
+          console.log("[AudioEngine] 320kbps fallback -> 160kbps:", fallback);
+          this.currentTrack.streamUrl = fallback;
+          if (this.audio) {
+            this.audio.src = fallback;
+            this.audio.play().catch(console.warn);
+          }
+        } else if (this.currentTrack.streamUrl.includes("_160.mp4")) {
+          const fallback = this.currentTrack.streamUrl.replace("_160.mp4", "_96.mp4");
+          console.log("[AudioEngine] 160kbps fallback -> 96kbps:", fallback);
+          this.currentTrack.streamUrl = fallback;
+          if (this.audio) {
+            this.audio.src = fallback;
+            this.audio.play().catch(console.warn);
+          }
+        }
+      }
     });
 
     this.isInitialized = true;
