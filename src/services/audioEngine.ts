@@ -1,5 +1,6 @@
 import { Track } from "../types/music";
 import { usePlayerStore } from "../stores/playerStore";
+import { useAudioStudioStore } from "../stores/audioStudioStore";
 import { TauriBridge } from "./tauriBridge";
 
 class AudioEngineService {
@@ -32,12 +33,12 @@ class AudioEngineService {
 
       this.bassBoostNode = this.audioCtx.createBiquadFilter();
       this.bassBoostNode.type = "lowshelf";
-      this.bassBoostNode.frequency.value = 90;
+      this.bassBoostNode.frequency.value = 85;
       this.bassBoostNode.gain.value = 0;
 
       this.clarityNode = this.audioCtx.createBiquadFilter();
       this.clarityNode.type = "highshelf";
-      this.clarityNode.frequency.value = 6000;
+      this.clarityNode.frequency.value = 5500;
       this.clarityNode.gain.value = 0;
 
       this.boosterGainNode = this.audioCtx.createGain();
@@ -62,9 +63,10 @@ class AudioEngineService {
   }
 
   public updateBooster(enabled: boolean, preampDb: number, bassDb: number, clarityDb: number) {
+    this.initAudioElement();
     this.initWebAudio();
     if (this.audioCtx && this.audioCtx.state === "suspended") {
-      this.audioCtx.resume();
+      this.audioCtx.resume().catch(console.warn);
     }
     if (this.bassBoostNode) {
       this.bassBoostNode.gain.value = enabled ? bassDb : 0;
@@ -81,6 +83,7 @@ class AudioEngineService {
   private initAudioElement() {
     if (this.audio) return;
     this.audio = new Audio();
+    this.audio.crossOrigin = "anonymous";
     this.audio.preload = "auto";
 
     // Playback events
@@ -140,6 +143,19 @@ class AudioEngineService {
       this.audioCtx.resume().catch(console.warn);
     }
 
+    // Immediately apply current booster settings to the new track
+    try {
+      const { boosterSettings } = useAudioStudioStore.getState();
+      this.updateBooster(
+        boosterSettings.enabled,
+        boosterSettings.preampBoostDb,
+        boosterSettings.bassBoostDb,
+        boosterSettings.clarityBoostDb
+      );
+    } catch (e) {
+      console.warn("Booster state sync:", e);
+    }
+
     // If it's a YouTube track
     if (track.providerId === "youtube" || track.youtubeVideoId) {
       if (this.audio) {
@@ -162,6 +178,7 @@ class AudioEngineService {
 
     if (this.audio) {
       try {
+        this.audio.crossOrigin = "anonymous";
         this.audio.src = audioUrl;
         this.audio.volume = usePlayerStore.getState().volume;
         await this.audio.play();
@@ -180,6 +197,9 @@ class AudioEngineService {
   }
 
   public resume() {
+    if (this.audioCtx && this.audioCtx.state === "suspended") {
+      this.audioCtx.resume().catch(console.warn);
+    }
     if (this.currentTrack?.providerId === "youtube" || this.currentTrack?.youtubeVideoId) {
       this.sendYouTubeCommand("playVideo");
     } else if (this.audio) {
@@ -256,3 +276,15 @@ class AudioEngineService {
 }
 
 export const AudioEngine = new AudioEngineService();
+
+// Subscribe to AudioStudio store so any booster change (presets, sliders, toggle) applies instantaneously in real time
+if (typeof window !== "undefined") {
+  useAudioStudioStore.subscribe((state) => {
+    AudioEngine.updateBooster(
+      state.boosterSettings.enabled,
+      state.boosterSettings.preampBoostDb,
+      state.boosterSettings.bassBoostDb,
+      state.boosterSettings.clarityBoostDb
+    );
+  });
+}

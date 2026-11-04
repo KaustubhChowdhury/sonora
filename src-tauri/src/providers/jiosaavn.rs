@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_decrypt_jiosaavn_url() {
-        let enc = "ID2ieOjCrwfgWvL5sXl4B1ImC5QfbsDymsKujagzVy8FM0d3vJrlyKgiXD0EM2z81H3pvljEuiPn0+MU70nnDRw7tS9a8Gtq";
+        let enc = "ID2ieOjCrwfgWvL5sXl4B1ImC5QfbsDyexyhGiurcXEpCNi8gBIelM0+/bASiAx59yNTLyuH4My32JGBcP+xKhw7tS9a8Gtq";
         let url = decrypt_jiosaavn_url(enc).expect("Decryption should succeed");
         assert!(url.starts_with("https://aac.saavncdn.com/"));
         assert!(url.contains("_320.mp4"));
@@ -201,10 +201,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_jiosaavn_live_search() {
-        let res = JioSaavnProvider::search_tracks("phonk", 5).await;
+        let res = JioSaavnProvider::search_tracks("trending hindi", 5).await;
         match res {
             Ok(items) => {
-                println!("Live search returned {} items", items.len());
                 assert!(!items.is_empty());
             }
             Err(e) => {

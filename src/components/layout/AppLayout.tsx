@@ -1,12 +1,11 @@
 import React, { useEffect } from "react";
-import { AppTitlebar } from "../shell/AppTitlebar";
 import { Sidebar } from "./Sidebar";
-import { MiniPlayer } from "./MiniPlayer";
 import { Inspector } from "./Inspector";
 import { FullPlayer } from "./FullPlayer";
 import { ContextMenu } from "../shared/ContextMenu";
 import { YouTubeHost } from "../player/YouTubeHost";
-import { TopMusicNavBar } from "../navigation/TopMusicNavBar";
+import { TopMusicBar } from "../navigation/TopMusicBar";
+import { BottomMenu } from "../navigation/BottomMenu";
 import { AudioBoosterModal } from "../audio/AudioBoosterModal";
 import { AnimatedPage } from "../../animations/AnimatedPage";
 import { useUiStore } from "../../stores/uiStore";
@@ -121,22 +120,22 @@ export const AppLayout: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0b0d12] text-zinc-100 font-sans">
-      {/* Custom Windows Titlebar */}
-      <AppTitlebar />
+      {/* Top Dedicated Music Player Bar (With Window Caption Controls & Booster) */}
+      <TopMusicBar />
 
-      {/* Floating Top Music & Sixfold Navigation Bar */}
-      <TopMusicNavBar />
-
-      {/* Upper Area: Sidebar + Main Workspace + Inspector */}
+      {/* Workspace: Sidebar + Main Content Screen + Inspector */}
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
         {sidebarOpen && <Sidebar />}
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#141821]/30 pt-16">
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#141821]/30 pb-20">
           <AnimatedPage pageKey={activeRoute}>
             {renderActiveScreen()}
           </AnimatedPage>
         </main>
         <Inspector />
       </div>
+
+      {/* Floating Bottom Sixfold Navigation Menu */}
+      <BottomMenu />
 
       {/* Expanded Full-Screen Player Modal */}
       <FullPlayer />
