@@ -36,12 +36,15 @@ interface UiState {
   isFullPlayerOpen: boolean;
   isCommandPaletteOpen: boolean;
   isOnboardingOpen: boolean;
+  sidebarOpen: boolean;
   
   contextMenu: ContextMenuState;
   toastMessage: string | null;
 
   // Actions
   navigate: (route: AppRoute, params?: { albumId?: string; artistId?: string; playlistId?: string }) => void;
+  toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
   toggleInspector: (tab?: InspectorTab) => void;
   setInspectorTab: (tab: InspectorTab) => void;
   closeInspector: () => void;
@@ -66,6 +69,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   isFullPlayerOpen: false,
   isCommandPaletteOpen: false,
   isOnboardingOpen: false,
+  sidebarOpen: false,
 
   contextMenu: {
     isOpen: false,
@@ -83,6 +87,9 @@ export const useUiStore = create<UiState>((set, get) => ({
       selectedPlaylistId: params?.playlistId ?? null,
     });
   },
+
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   toggleInspector: (tab) => {
     const { inspectorOpen, inspectorTab } = get();

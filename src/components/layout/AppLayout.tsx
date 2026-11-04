@@ -6,6 +6,7 @@ import { Inspector } from "./Inspector";
 import { FullPlayer } from "./FullPlayer";
 import { ContextMenu } from "../shared/ContextMenu";
 import { YouTubeHost } from "../player/YouTubeHost";
+import { FloatingIslandNav } from "../navigation/FloatingIslandNav";
 import { AnimatedPage } from "../../animations/AnimatedPage";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
@@ -23,7 +24,7 @@ import { SettingsScreen } from "../../features/settings/SettingsScreen";
 import { TauriBridge } from "../../services/tauriBridge";
 
 export const AppLayout: React.FC = () => {
-  const { activeRoute, toastMessage, toggleInspector, navigate } = useUiStore();
+  const { activeRoute, toastMessage, toggleInspector, navigate, sidebarOpen } = useUiStore();
   const {
     isPlaying,
     currentTimeMs,
@@ -124,7 +125,7 @@ export const AppLayout: React.FC = () => {
 
       {/* Upper Area: Sidebar + Main Workspace + Inspector */}
       <div className="flex-1 flex overflow-hidden min-h-0 relative">
-        <Sidebar />
+        {sidebarOpen && <Sidebar />}
         <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#141821]/30">
           <AnimatedPage pageKey={activeRoute}>
             {renderActiveScreen()}
@@ -132,6 +133,9 @@ export const AppLayout: React.FC = () => {
         </main>
         <Inspector />
       </div>
+
+      {/* Floating Island Navigation Dock (CollectUI Pill Design) */}
+      <FloatingIslandNav />
 
       {/* Persistent Mini-Player Bottom Bar */}
       <MiniPlayer />

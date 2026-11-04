@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Search, Minus, Square, X, ShieldCheck, Zap } from "lucide-react";
+import { Search, Minus, Square, X, ShieldCheck, Zap, PanelLeft } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
 import { useAudioStudioStore } from "../../stores/audioStudioStore";
 import { isTauri } from "../../services/tauriBridge";
 
 export const AppTitlebar: React.FC = () => {
-  const { navigate, setInspectorTab } = useUiStore();
+  const { navigate, setInspectorTab, toggleSidebar, sidebarOpen } = useUiStore();
   const { outputStatus } = usePlayerStore();
   const { outputMode } = useAudioStudioStore();
   const [isMaximized, setIsMaximized] = useState(false);
@@ -52,14 +52,21 @@ export const AppTitlebar: React.FC = () => {
     >
       {/* Left: Sonora Brand Mark & Drag Zone */}
       <div data-tauri-drag-region className="flex items-center gap-2.5">
+        <button
+          onClick={toggleSidebar}
+          title={sidebarOpen ? "Hide Left Sidebar" : "Show Left Sidebar"}
+          className="p-1 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+        >
+          <PanelLeft className="w-3.5 h-3.5" />
+        </button>
         <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#9b7bff] to-[#6366f1] flex items-center justify-center text-white text-[11px] font-bold shadow-sm">
           S
         </div>
         <span className="text-xs font-bold tracking-wider text-zinc-200 uppercase font-sans">
           Sonora
         </span>
-        <span className="text-[10px] text-zinc-500 font-mono hidden sm:inline">
-          Studio 1.0
+        <span className="text-[10px] text-cyan-400 font-mono hidden sm:inline font-semibold">
+          Streaming Studio
         </span>
       </div>
 
