@@ -48,20 +48,18 @@ export const TopMusicBar: React.FC = () => {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    TauriBridge.isWindowMaximized().then(setIsMaximized);
 
-    // Listen to resize events to keep maximize/restore icon accurately synced
-    if (isTauri()) {
-      try {
-        const appWin = getCurrentWindow();
-        appWin.onResized(() => {
-          TauriBridge.isWindowMaximized().then(setIsMaximized);
-        }).then((fn) => {
-          unlisten = fn;
-        }).catch(() => {});
-      } catch (e) {
-        console.warn("Window resize listener error:", e);
-      }
+    try {
+      const appWin = getCurrentWindow();
+      appWin.isMaximized().then(setIsMaximized).catch(() => {});
+
+      appWin.onResized(() => {
+        appWin.isMaximized().then(setIsMaximized).catch(() => {});
+      }).then((fn) => {
+        unlisten = fn;
+      }).catch(() => {});
+    } catch (e) {
+      console.warn("Window init error:", e);
     }
 
     return () => {
@@ -72,7 +70,11 @@ export const TopMusicBar: React.FC = () => {
   const handleMinimize = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    await TauriBridge.minimizeWindow();
+    try {
+      await getCurrentWindow().minimize();
+    } catch (err) {
+      console.error("Minimize error:", err);
+    }
   };
 
   const handleMaximizeToggle = async (e?: React.MouseEvent) => {
@@ -80,15 +82,24 @@ export const TopMusicBar: React.FC = () => {
       e.stopPropagation();
       e.preventDefault();
     }
-    await TauriBridge.toggleMaximizeWindow();
-    const max = await TauriBridge.isWindowMaximized();
-    setIsMaximized(max);
+    try {
+      const appWin = getCurrentWindow();
+      await appWin.toggleMaximize();
+      const max = await appWin.isMaximized();
+      setIsMaximized(max);
+    } catch (err) {
+      console.error("Maximize toggle error:", err);
+    }
   };
 
   const handleClose = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    await TauriBridge.closeWindow();
+    try {
+      await getCurrentWindow().close();
+    } catch (err) {
+      console.error("Close error:", err);
+    }
   };
 
   const formatTime = (ms: number) => {

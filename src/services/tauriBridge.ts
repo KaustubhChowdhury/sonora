@@ -1,13 +1,18 @@
-import { invoke, isTauri as isTauriCore } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Track, SourceKind, AudioDevice, AudioOutputStatus, DspSettings, LyricsData, FolderScanStatus } from "../types/music";
 
+if (typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)) {
+  (window as any).isTauri = true;
+}
+
 export const isTauri = () => {
-  try {
-    return isTauriCore();
-  } catch {
-    return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
-  }
+  return (
+    typeof window !== "undefined" &&
+    ("__TAURI_INTERNALS__" in window ||
+      "__TAURI__" in window ||
+      Boolean((window as any).isTauri))
+  );
 };
 
 // Initial built-in audiophile demo catalogue for immediate testing and listening
@@ -528,44 +533,34 @@ export class TauriBridge {
   }
 
   static async minimizeWindow(): Promise<void> {
-    if (isTauri()) {
-      try {
-        await getCurrentWindow().minimize();
-      } catch (err) {
-        console.error("Minimize error:", err);
-      }
+    try {
+      await getCurrentWindow().minimize();
+    } catch (err) {
+      console.warn("Minimize error / non-Tauri:", err);
     }
   }
 
   static async toggleMaximizeWindow(): Promise<void> {
-    if (isTauri()) {
-      try {
-        await getCurrentWindow().toggleMaximize();
-      } catch (err) {
-        console.error("Toggle maximize error:", err);
-      }
+    try {
+      await getCurrentWindow().toggleMaximize();
+    } catch (err) {
+      console.warn("Toggle maximize error / non-Tauri:", err);
     }
   }
 
   static async closeWindow(): Promise<void> {
-    if (isTauri()) {
-      try {
-        await getCurrentWindow().close();
-      } catch (err) {
-        console.error("Close error:", err);
-      }
+    try {
+      await getCurrentWindow().close();
+    } catch (err) {
+      console.warn("Close error / non-Tauri:", err);
     }
   }
 
   static async isWindowMaximized(): Promise<boolean> {
-    if (isTauri()) {
-      try {
-        return await getCurrentWindow().isMaximized();
-      } catch (err) {
-        console.error("isMaximized error:", err);
-        return false;
-      }
+    try {
+      return await getCurrentWindow().isMaximized();
+    } catch {
+      return false;
     }
-    return false;
   }
 }
