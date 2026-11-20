@@ -1,168 +1,157 @@
-import React from "react";
-import { Plus, ListMusic, Play, Trash2, Clock, Sparkles } from "lucide-react";
+import React, { useState } from "react";
+import { ListMusic, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useLibraryStore } from "../../stores/libraryStore";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
-import { TrackRow } from "../../components/shared/TrackRow";
+import { CollectionHeader, Mosaic } from "../../components/shared/CollectionHeader";
+import { TrackList } from "../../components/shared/TrackRow";
+import { MediaTile, TileGrid } from "../../components/shared/MediaTile";
+import { Button, Dialog, EmptyState, IconButton, NameDialog, PageHeader } from "../../components/ui/primitives";
+import { formatLongDuration, plural } from "../../lib/format";
 
 export const PlaylistsScreen: React.FC = () => {
-  const { playlists, tracks, addPlaylist, deletePlaylist } = useLibraryStore();
-  const { selectedPlaylistId, navigate, showToast } = useUiStore();
-  const { playTrack } = usePlayerStore();
+  const { selectedPlaylistId } = useUiStore();
+  return selectedPlaylistId ? <PlaylistDetail id={selectedPlaylistId} /> : <PlaylistIndex />;
+};
 
-  const activePlaylist =
-    playlists.find((p) => p.id === selectedPlaylistId) || playlists[0];
+const PlaylistIndex: React.FC = () => {
+  const { customPlaylists } = useLibraryStore();
+  const { navigate, openNewPlaylist } = useUiStore();
+  return (
+    <div className="flex-1 overflow-y-auto px-8 pb-16">
+      <PageHeader title="Playlists" actions={<Button onClick={() => openNewPlaylist()}>New playlist</Button>} />
+      {customPlaylists.length === 0 ? (
+        <EmptyState
+          icon={<ListMusic className="w-6 h-6" />}
+          title="No playlists yet"
+          body="Create one here, or right-click any song and choose “Add to playlist”."
+          action={<Button variant="primary" onClick={() => openNewPlaylist()}>New playlist</Button>}
+        />
+      ) : (
+        <TileGrid>
+          {customPlaylists.map((pl) => (
+            <MediaTile
+              key={pl.id}
+              title={pl.name}
+              subtitle={pl.tracks.length ? plural(pl.tracks.length, "song") : "Empty"}
+              artworkUrl={pl.tracks.find((t) => t.artworkUrl)?.artworkUrl}
+              onOpen={() => navigate("playlists", { playlistId: pl.id })}
+              onPlay={pl.tracks.length ? () => usePlayerStore.getState().playTrack(pl.tracks[0], pl.tracks) : undefined}
+            />
+          ))}
+        </TileGrid>
+      )}
+    </div>
+  );
+};
 
-  const handleCreateNew = () => {
-    const name = prompt("Enter playlist name:");
-    if (name && name.trim()) {
-      const pl = addPlaylist(name.trim());
-      navigate("playlists", { playlistId: pl.id });
-      showToast(`Created playlist "${name}"`);
-    }
-  };
+const PlaylistDetail: React.FC<{ id: string }> = ({ id }) => {
+  const pl = useLibraryStore((s) => s.customPlaylists.find((p) => p.id === id));
+  const { renameCustomPlaylist, deleteCustomPlaylist } = useLibraryStore();
+  const { navigate, showToast } = useUiStore();
+  const [menu, setMenu] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Determine tracks for smart playlists or user playlists
-  let playlistTracks = tracks;
-  if (activePlaylist?.id === "playlist-smart-lossless") {
-    playlistTracks = tracks.filter(
-      (t) =>
-        ["FLAC", "WAV", "ALAC"].includes(t.codec?.toUpperCase() || "") ||
-        (t.bitDepth && t.bitDepth > 16)
+  if (!pl) {
+    return (
+      <div className="px-8">
+        <EmptyState
+          title="This playlist no longer exists"
+          action={<Button onClick={() => navigate("playlists")}>See all playlists</Button>}
+        />
+      </div>
     );
-  } else if (activePlaylist?.id === "playlist-smart-recent") {
-    playlistTracks = tracks.slice(0, 10);
   }
 
+  const total = pl.tracks.reduce((s, t) => s + t.durationMs, 0);
+
   return (
-    <div className="flex-1 flex h-full overflow-hidden select-none">
-      {/* Playlists Left Drawer */}
-      <div className="w-64 border-r border-white/[0.06] p-4 flex flex-col space-y-3 bg-surface/40">
-        <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-          <h2 className="text-xs uppercase font-semibold text-zinc-400 tracking-wider">
-            Your Playlists
-          </h2>
-          <button
-            onClick={handleCreateNew}
-            title="Create playlist"
-            className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto space-y-1">
-          {playlists.map((pl) => (
-            <button
-              key={pl.id}
-              onClick={() => navigate("playlists", { playlistId: pl.id })}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left transition-colors ${
-                activePlaylist?.id === pl.id
-                  ? "bg-purple-600/25 text-purple-200 font-semibold border border-purple-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
-              }`}
-            >
-              <ListMusic className="w-4 h-4 shrink-0 text-zinc-500" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate">{pl.name}</p>
-                <p className="text-[10px] text-zinc-500 font-mono">
-                  {pl.isSmart ? "Smart Rules" : `${pl.trackCount} tracks`}
-                </p>
+    <div className="flex-1 overflow-y-auto pb-16">
+      <CollectionHeader
+        kind="Playlist"
+        title={pl.name}
+        description={pl.description}
+        artwork={<Mosaic tracks={pl.tracks} className="w-[184px] h-[184px]" />}
+        meta={pl.tracks.length ? `${plural(pl.tracks.length, "song")}, ${formatLongDuration(total)}` : "No songs yet"}
+        tracks={pl.tracks}
+        actions={
+          <div className="relative">
+            <IconButton label="Playlist options" className="w-10 h-10" onClick={() => setMenu((m) => !m)}>
+              <MoreHorizontal className="w-5 h-5" />
+            </IconButton>
+            {menu && (
+              <div
+                className="absolute left-0 top-full mt-1 z-20 w-48 p-1 rounded-lg bg-surface-elevated border border-line-strong shadow-2xl shadow-black/50"
+                onMouseLeave={() => setMenu(false)}
+              >
+                <button
+                  onClick={() => {
+                    setMenu(false);
+                    setRenaming(true);
+                  }}
+                  className="w-full h-8 px-2.5 flex items-center gap-3 rounded-md text-[13px] hover:bg-white/[0.07]"
+                >
+                  <Pencil className="w-4 h-4 text-ink-2" /> Rename
+                </button>
+                <button
+                  onClick={() => {
+                    setMenu(false);
+                    setConfirmDelete(true);
+                  }}
+                  className="w-full h-8 px-2.5 flex items-center gap-3 rounded-md text-[13px] text-danger hover:bg-danger/10"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete playlist
+                </button>
               </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Playlist Content View */}
-      <div className="flex-1 overflow-y-auto p-8 space-y-6 pb-48">
-        {activePlaylist ? (
-          <>
-            {/* Header */}
-            <div className="flex items-end justify-between pb-6 border-b border-white/[0.06]">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono uppercase font-semibold text-purple-400 tracking-wider">
-                    {activePlaylist.isSmart ? "Dynamic Smart Vault" : "User Playlist"}
-                  </span>
-                  {activePlaylist.isSmart && (
-                    <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-mono">
-                      Auto-Curated
-                    </span>
-                  )}
-                </div>
-
-                <h1 className="text-3xl font-bold text-white tracking-tight">
-                  {activePlaylist.name}
-                </h1>
-                <p className="text-xs text-zinc-400 max-w-lg">
-                  {activePlaylist.description || "Custom user playlist"}
-                </p>
-
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    onClick={() => {
-                      if (playlistTracks.length > 0) {
-                        playTrack(playlistTracks[0], playlistTracks);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs shadow-lg hover:scale-105 active:scale-95 transition-all"
-                  >
-                    <Play className="w-4 h-4 fill-current ml-0.5" />
-                    <span>Play All ({playlistTracks.length})</span>
-                  </button>
-
-                  {!activePlaylist.isSmart && (
-                    <button
-                      onClick={() => {
-                        if (confirm(`Delete playlist "${activePlaylist.name}"?`)) {
-                          deletePlaylist(activePlaylist.id);
-                          showToast(`Deleted playlist "${activePlaylist.name}"`);
-                        }
-                      }}
-                      className="p-2.5 rounded-full bg-white/10 hover:bg-red-950/40 text-zinc-400 hover:text-red-400 transition-colors"
-                      title="Delete playlist"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Tracks */}
-            <div className="space-y-1">
-              <div className="grid grid-cols-[36px_1fr_1fr_120px_140px_70px] items-center px-3 pb-2 text-[11px] font-mono uppercase font-semibold text-zinc-500 border-b border-white/[0.05]">
-                <span className="text-center">#</span>
-                <span>Title</span>
-                <span>Album</span>
-                <span>Source</span>
-                <span>Format Spec</span>
-                <span className="text-right">Duration</span>
-              </div>
-
-              {playlistTracks.length === 0 ? (
-                <div className="py-20 text-center text-xs text-zinc-500">
-                  No tracks in this playlist yet. Add tracks from your library.
-                </div>
-              ) : (
-                playlistTracks.map((track, idx) => (
-                  <TrackRow
-                    key={track.id}
-                    track={track}
-                    index={idx}
-                    playlistContext={playlistTracks}
-                  />
-                ))
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="py-24 text-center text-xs text-zinc-500">
-            Select or create a playlist.
+            )}
           </div>
+        }
+      />
+
+      <div className="px-6">
+        {pl.tracks.length === 0 ? (
+          <EmptyState
+            className="px-2"
+            title="Add songs to this playlist"
+            body="Right-click any song in search results, your library or the queue, then choose “Add to playlist”."
+            action={<Button onClick={() => navigate("search")}>Search for songs</Button>}
+          />
+        ) : (
+          <TrackList tracks={pl.tracks} />
         )}
       </div>
+
+      <NameDialog
+        open={renaming}
+        title="Rename playlist"
+        confirmLabel="Rename"
+        initial={pl.name}
+        onClose={() => setRenaming(false)}
+        onConfirm={(name) => renameCustomPlaylist(pl.id, name)}
+      />
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} title={`Delete “${pl.name}”?`}>
+        <p className="text-[13px] text-ink-2 pt-1">
+          The playlist is removed. The songs in it stay in your library and search results.
+        </p>
+        <div className="flex justify-end gap-2 mt-5">
+          <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            className="bg-danger text-white hover:bg-danger/90"
+            onClick={() => {
+              deleteCustomPlaylist(pl.id);
+              setConfirmDelete(false);
+              showToast(`Deleted “${pl.name}”`);
+              navigate("playlists");
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 };
