@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { AudioDevice, AudioOutputMode, DspSettings } from "../types/music";
 
 export const EQ_FREQUENCIES = [
@@ -16,12 +17,11 @@ export const EQ_FREQUENCIES = [
 
 export const EQ_PRESETS: Record<string, number[]> = {
   Flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  "Audiophile Neutral": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   "Bass Boost": [5.5, 4.5, 3.0, 1.5, 0, 0, 0, 0, 0, 0],
   "Vocal Clarity": [-1.0, -0.5, 0, 2.0, 3.5, 3.0, 2.0, 1.0, 0, -1.0],
   "Acoustic Warmth": [3.0, 2.5, 1.5, 1.0, 0.5, 0.5, 1.0, 1.5, 2.0, 1.5],
-  "Rock & Electric": [4.0, 3.0, 1.5, 0, -1.0, 0.5, 2.0, 3.5, 4.0, 3.5],
-  "Electronic / Club": [5.0, 4.0, 2.0, 0, -1.5, 0, 2.0, 3.0, 4.5, 4.0],
+  Rock: [4.0, 3.0, 1.5, 0, -1.0, 0.5, 2.0, 3.5, 4.0, 3.5],
+  Electronic: [5.0, 4.0, 2.0, 0, -1.5, 0, 2.0, 3.0, 4.5, 4.0],
   Custom: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 };
 
@@ -34,12 +34,12 @@ export interface BoosterSettings {
 }
 
 export const BOOSTER_PRESETS: Record<string, { preamp: number; bass: number; clarity: number }> = {
-  "🚀 Max Loudness (+9dB)": { preamp: 9.0, bass: 3.0, clarity: 2.0 },
-  "⚡ Phonk & Drift Bass Blast": { preamp: 6.0, bass: 12.0, clarity: 3.5 },
-  "🔊 Sub-Woofer Club Thump": { preamp: 4.5, bass: 10.0, clarity: 1.0 },
-  "✨ Vocal & Acoustic Shine": { preamp: 3.0, bass: 1.0, clarity: 7.5 },
-  "📻 Warm Tube Saturation": { preamp: 5.0, bass: 5.0, clarity: 2.0 },
-  "🎧 Night Earphone Leveler": { preamp: 6.0, bass: 4.0, clarity: 3.0 },
+  Loud: { preamp: 9.0, bass: 3.0, clarity: 2.0 },
+  "Heavy bass": { preamp: 6.0, bass: 12.0, clarity: 3.5 },
+  Club: { preamp: 4.5, bass: 10.0, clarity: 1.0 },
+  "Clear vocals": { preamp: 3.0, bass: 1.0, clarity: 7.5 },
+  Warm: { preamp: 5.0, bass: 5.0, clarity: 2.0 },
+  "Quiet room": { preamp: 6.0, bass: 4.0, clarity: 3.0 },
 };
 
 interface AudioStudioState {
@@ -81,26 +81,11 @@ interface AudioStudioState {
   setBoosterModalOpen: (open: boolean) => void;
 }
 
-export const useAudioStudioStore = create<AudioStudioState>((set, get) => ({
-  devices: [
-    {
-      id: "default-wasapi",
-      name: "Realtek High Definition Audio (Default System Endpoint)",
-      isDefault: true,
-      sampleRates: [44100, 48000, 88200, 96000, 192000],
-      channels: 2,
-      exclusiveSupported: true,
-    },
-    {
-      id: "usb-dac-01",
-      name: "USB HiFi DAC / Audio Interface (ASIO/WASAPI Direct)",
-      isDefault: false,
-      sampleRates: [44100, 48000, 88200, 96000, 176400, 192000],
-      channels: 2,
-      exclusiveSupported: true,
-    },
-  ],
-  selectedDeviceId: "default-wasapi",
+export const useAudioStudioStore = create<AudioStudioState>()(
+  persist(
+  (set, get) => ({
+  devices: [],
+  selectedDeviceId: "",
   outputMode: "shared",
   exclusiveModeWarningDismissed: false,
 
@@ -118,7 +103,7 @@ export const useAudioStudioStore = create<AudioStudioState>((set, get) => ({
     preampBoostDb: 6.0, // +6 dB (200% volume by default)
     bassBoostDb: 8.0,   // +8 dB sub-bass punch
     clarityBoostDb: 3.5, // +3.5 dB vocal/treble shine
-    activePreset: "⚡ Phonk & Drift Bass Blast",
+    activePreset: "Heavy bass",
   },
   isBoosterModalOpen: false,
 
@@ -258,4 +243,19 @@ export const useAudioStudioStore = create<AudioStudioState>((set, get) => ({
   },
 
   setBoosterModalOpen: (open) => set({ isBoosterModalOpen: open }),
-}));
+}),
+  {
+    name: "sonora-sound",
+    version: 2,
+    storage: createJSONStorage(() => localStorage),
+    partialize: (s) => ({
+      selectedDeviceId: s.selectedDeviceId,
+      outputMode: s.outputMode,
+      exclusiveModeWarningDismissed: s.exclusiveModeWarningDismissed,
+      dspSettings: s.dspSettings,
+      boosterSettings: s.boosterSettings,
+    }),
+    migrate: () => ({}) as any,
+  }
+  )
+);
