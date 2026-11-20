@@ -1,210 +1,175 @@
 import React from "react";
 import {
   Home,
-  Search,
+  Compass,
   Music2,
   Disc3,
-  Users2,
-  FolderTree,
-  Star,
+  MicVocal,
+  Heart,
   History,
-  Compass,
-  Sliders,
+  FolderOpen,
+  SlidersHorizontal,
   Settings,
   Plus,
   ListMusic,
-  ShieldCheck,
-  Zap,
-  Music,
 } from "lucide-react";
 import { YoutubeIcon } from "../shared/ProviderIcons";
 import { useUiStore, AppRoute } from "../../stores/uiStore";
-import { useLibraryStore } from "../../stores/libraryStore";
-import { useAudioStudioStore } from "../../stores/audioStudioStore";
+import { useLibraryStore, LibraryView } from "../../stores/libraryStore";
 import { usePlayerStore } from "../../stores/playerStore";
+import { cn } from "../../lib/cn";
+import { EqBars } from "../ui/primitives";
+
+const SaavnGlyph: React.FC<{ className?: string }> = ({ className }) => (
+  <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="8" cy="8" r="6.25" />
+    <path d="M10.5 5.75c-.6-.6-1.5-.9-2.5-.9-1.3 0-2.2.7-2.2 1.6 0 2 4.6 1.2 4.6 3.3 0 1-.9 1.7-2.4 1.7-1 0-1.9-.3-2.6-1" strokeLinecap="round" />
+  </svg>
+);
 
 export const Sidebar: React.FC = () => {
-  const { activeRoute, navigate } = useUiStore();
-  const { playlists, addPlaylist, activeView, setActiveView } = useLibraryStore();
-  const { outputMode } = useAudioStudioStore();
-  const { outputStatus } = usePlayerStore();
+  const { activeRoute, navigate, selectedPlaylistId, openNewPlaylist } = useUiStore();
+  const { customPlaylists, activeView, setActiveView, favourites } = useLibraryStore();
+  const { currentTrack, isPlaying } = usePlayerStore();
 
-  const handleCreatePlaylist = () => {
-    const name = prompt("Enter new playlist name:");
-    if (name && name.trim()) {
-      addPlaylist(name.trim());
-    }
-  };
-
-  const navItem = (
-    label: string,
-    icon: React.ReactNode,
-    targetRoute: AppRoute,
-    subView?: "songs" | "albums" | "artists" | "folders" | "favourites" | "history",
-    badge?: { text: string; color: string }
-  ) => {
-    const isRouteActive = activeRoute === targetRoute;
-    const isViewActive = subView ? isRouteActive && activeView === subView : isRouteActive;
-
+  const Item: React.FC<{
+    label: string;
+    icon: React.ReactNode;
+    route: AppRoute;
+    view?: LibraryView;
+    meta?: React.ReactNode;
+  }> = ({ label, icon, route, view, meta }) => {
+    const active = activeRoute === route && (!view || activeView === view);
     return (
       <button
         onClick={() => {
-          if (subView) {
-            setActiveView(subView);
-          }
-          navigate(targetRoute);
+          if (view) setActiveView(view);
+          navigate(route);
         }}
-        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors text-left select-none ${
-          isViewActive
-            ? "bg-purple-500/15 text-purple-300 font-semibold border border-purple-500/20"
-            : "text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]"
-        }`}
-      >
-        <div className="flex items-center gap-2.5 truncate">
-          <span className={isViewActive ? "text-purple-400" : "text-zinc-500"}>
-            {icon}
-          </span>
-          <span className="truncate">{label}</span>
-        </div>
-        {badge && (
-          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full border ${badge.color}`}>
-            {badge.text}
-          </span>
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "relative w-full h-8 flex items-center gap-3 pl-3 pr-2 rounded-md text-[13px] text-left transition-colors",
+          active ? "bg-white/[0.08] text-ink font-semibold" : "text-ink-2 hover:text-ink hover:bg-white/[0.04]"
         )}
+      >
+        {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-signal" />}
+        <span className={cn("w-4 h-4 shrink-0 [&>svg]:w-4 [&>svg]:h-4", active ? "text-ink" : "text-ink-3")}>{icon}</span>
+        <span className="truncate flex-1">{label}</span>
+        {meta}
       </button>
     );
   };
 
+  const Group: React.FC<{ title?: string; children: React.ReactNode; action?: React.ReactNode }> = ({
+    title,
+    children,
+    action,
+  }) => (
+    <div className="mt-5 first:mt-0">
+      {title && (
+        <div className="flex items-center justify-between pl-3 pr-1 mb-1 h-6">
+          <span className="text-[12px] font-medium text-ink-3">{title}</span>
+          {action}
+        </div>
+      )}
+      <div className="flex flex-col gap-px">{children}</div>
+    </div>
+  );
+
   return (
-    <aside className="w-[240px] shrink-0 h-full flex flex-col bg-surface/90 border-r border-white/[0.06] p-3 text-zinc-300 select-none">
-      {/* Brand Header */}
-      <div className="flex items-center justify-between px-3 py-3 mb-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-purple-950/50">
-            <span className="font-extrabold text-sm tracking-tighter">S</span>
-          </div>
-          <div>
-            <h1 className="text-sm font-extrabold tracking-wider text-zinc-100 uppercase">
-              Sonora
-            </h1>
-            <p className="text-[10px] text-cyan-400 font-mono tracking-tight -mt-0.5 font-medium">
-              JioSaavn & YouTube
-            </p>
-          </div>
-        </div>
+    <aside className="w-[220px] shrink-0 flex flex-col min-h-0 pl-3 pr-2 pb-3">
+      <div className="h-9 flex items-center gap-2 pl-3 mb-3">
+        <Wordmark />
       </div>
 
-      {/* Main Streaming Navigation */}
-      <div className="space-y-1 mb-4">
-        {navItem("Home Hub", <Home className="w-4 h-4" />, "home")}
-        {navItem(
-          "Standalone Search",
-          <Search className="w-4 h-4" />,
-          "search",
-          undefined,
-          { text: "FAST", color: "bg-purple-500/20 text-purple-300 border-purple-500/30" }
-        )}
-        {navItem(
-          "JioSaavn Music",
-          <Music className="w-4 h-4 text-cyan-400" />,
-          "jiosaavn",
-          undefined,
-          { text: "320K", color: "bg-cyan-950/60 text-cyan-300 border-cyan-500/40" }
-        )}
-        {navItem(
-          "YouTube Music",
-          <YoutubeIcon className="w-4 h-4 text-red-500" />,
-          "youtube",
-          undefined,
-          { text: "LIVE", color: "bg-red-950/60 text-red-300 border-red-500/40" }
-        )}
-        {navItem("Explore & Radio", <Compass className="w-4 h-4" />, "explore")}
-      </div>
+      <nav className="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
+        <Group>
+          <Item label="Home" icon={<Home />} route="home" />
+          <Item label="Free music" icon={<Compass />} route="explore" />
+        </Group>
 
-      {/* Your Music / Vault Section */}
-      <div className="mb-4">
-        <div className="px-3 pb-1 text-[10px] uppercase font-semibold text-zinc-500 tracking-wider">
-          Your Collection
-        </div>
-        <div className="space-y-0.5">
-          {navItem("Favourites", <Star className="w-4 h-4" />, "library", "favourites")}
-          {navItem("Recent History", <History className="w-4 h-4" />, "library", "history")}
-          {navItem("Local Vault", <FolderTree className="w-4 h-4" />, "library", "folders")}
-        </div>
-      </div>
+        <Group title="Streaming">
+          <Item label="JioSaavn" icon={<SaavnGlyph />} route="jiosaavn" />
+          <Item label="YouTube" icon={<YoutubeIcon />} route="youtube" />
+        </Group>
 
-      {/* Playlists Section */}
-      <div className="flex-1 min-h-0 flex flex-col mb-4">
-        <div className="flex items-center justify-between px-3 pb-1">
-          <span className="text-[10px] uppercase font-semibold text-zinc-500 tracking-wider">
-            Playlists
-          </span>
-          <button
-            onClick={handleCreatePlaylist}
-            title="Create new playlist"
-            className="p-0.5 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 text-xs">
-          {playlists.map((pl) => (
+        <Group title="Your music">
+          <Item label="Songs" icon={<Music2 />} route="library" view="songs" />
+          <Item label="Albums" icon={<Disc3 />} route="library" view="albums" />
+          <Item label="Artists" icon={<MicVocal />} route="library" view="artists" />
+          <Item
+            label="Liked songs"
+            icon={<Heart />}
+            route="library"
+            view="favourites"
+            meta={favourites.length > 0 ? <span className="text-[12px] text-ink-3 tnum">{favourites.length}</span> : null}
+          />
+          <Item label="History" icon={<History />} route="library" view="history" />
+          <Item label="Folders" icon={<FolderOpen />} route="library" view="folders" />
+        </Group>
+
+        <Group
+          title="Playlists"
+          action={
             <button
-              key={pl.id}
-              onClick={() => navigate("playlists", { playlistId: pl.id })}
-              className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs truncate transition-colors text-left ${
-                activeRoute === "playlists"
-                  ? "bg-white/[0.06] text-zinc-100 font-medium"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
-              }`}
+              onClick={() => openNewPlaylist()}
+              title="New playlist"
+              aria-label="New playlist"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-ink-3 hover:text-ink hover:bg-white/[0.06]"
             >
-              <ListMusic className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-              <span className="truncate">{pl.name}</span>
-              {pl.isSmart && (
-                <span className="ml-auto text-[9px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">
-                  auto
-                </span>
-              )}
+              <Plus className="w-4 h-4" />
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Bottom Area: Audio Studio & Settings */}
-      <div className="pt-2 border-t border-white/[0.06] space-y-1">
-        <button
-          onClick={() => navigate("audio-studio")}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-            activeRoute === "audio-studio"
-              ? "bg-purple-500/15 text-purple-300 border border-purple-500/20"
-              : "text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]"
-          }`}
+          }
         >
-          <div className="flex items-center gap-2.5">
-            <Sliders className="w-4 h-4 text-purple-400" />
-            <span>Audio Studio</span>
-          </div>
-          {outputMode === "exclusive" || outputStatus.isBitPerfect ? (
-            <span
-              title="Exclusive Bit-Perfect Direct Output active"
-              className="flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-500/30"
+          {customPlaylists.length === 0 ? (
+            <button
+              onClick={() => openNewPlaylist()}
+              className="text-left pl-3 py-1.5 text-[12px] text-ink-3 hover:text-ink-2"
             >
-              <ShieldCheck className="w-3 h-3 text-purple-400" />
-              <span>DIRECT</span>
-            </span>
+              Create your first playlist
+            </button>
           ) : (
-            <span
-              title="Shared mode Windows mixer"
-              className="flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400"
-            >
-              <Zap className="w-2.5 h-2.5 text-zinc-500" />
-              <span>SHARED</span>
-            </span>
+            customPlaylists.map((pl) => {
+              const active = activeRoute === "playlists" && selectedPlaylistId === pl.id;
+              const playingHere = !!currentTrack && pl.tracks.some((t) => t.id === currentTrack.id);
+              return (
+                <button
+                  key={pl.id}
+                  onClick={() => navigate("playlists", { playlistId: pl.id })}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "relative w-full h-8 flex items-center gap-3 pl-3 pr-2 rounded-md text-[13px] text-left transition-colors",
+                    active ? "bg-white/[0.08] text-ink font-semibold" : "text-ink-2 hover:text-ink hover:bg-white/[0.04]"
+                  )}
+                >
+                  {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-signal" />}
+                  <ListMusic className={cn("w-4 h-4 shrink-0", active ? "text-ink" : "text-ink-3")} />
+                  <span className="truncate flex-1">{pl.name}</span>
+                  {playingHere && <EqBars playing={isPlaying} />}
+                </button>
+              );
+            })
           )}
-        </button>
+        </Group>
+      </nav>
 
-        {navItem("Settings", <Settings className="w-4 h-4" />, "settings")}
+      <div className="pt-3 mt-2 border-t border-line flex flex-col gap-px">
+        <Item label="Sound" icon={<SlidersHorizontal />} route="audio-studio" />
+        <Item label="Settings" icon={<Settings />} route="settings" />
       </div>
     </aside>
   );
 };
+
+/** The mark is a quarter-note stem cut from a circle; the name is set in the UI face. */
+const Wordmark: React.FC = () => (
+  <div className="flex items-center gap-2 select-none" data-tauri-drag-region>
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <circle cx="9" cy="9" r="8" fill="var(--color-signal)" />
+      <path d="M10.5 4.5v6.2a2.3 2.3 0 1 1-1.4-2.1V4.5h1.4z" fill="var(--color-signal-ink)" />
+    </svg>
+    <span className="text-[15px] font-bold tracking-[-0.01em] text-ink" data-tauri-drag-region>
+      Sonora
+    </span>
+  </div>
+);
