@@ -1,110 +1,83 @@
 # Sonora
 
-<p align="center">
-  <strong>A premium, local-first Windows music player with audiophile-grade playback, transparent format inspection, and lawful music discovery.</strong>
-</p>
+A desktop music player for Windows that plays your own files and streams from JioSaavn, YouTube, Jamendo and your own Subsonic/Navidrome server, all in one library, queue and set of playlists.
 
----
+Built with Tauri 2 (Rust) and React.
 
-## 🎧 Overview
+## Features
 
-**Sonora** combines the speed and reliability of a dedicated desktop library player with the visual refinement, ambient artwork, and discoverability of a modern streaming client.
+- **Your files**: add folders and Sonora reads tags and cover art from FLAC, WAV, ALAC, MP3, AAC, Ogg and Opus. Files stay where they are.
+- **Native audio engine** (Rust, Symphonia + WASAPI) for local files, with a Shared mode and a bit-perfect Exclusive mode.
+- **Streaming**: search and play JioSaavn and YouTube, free Creative Commons music from Jamendo, and your own Subsonic-compatible server.
+- **Playlists and liked songs** that mix local and streamed tracks. Everything is saved on your computer.
+- **10-band equalizer** and preamp, applied to both local files and streams, plus a loudness/bass/clarity boost with a limiter for quiet streams.
+- **Synced lyrics** from `.lrc` files next to your songs or from LRCLIB.
+- **Queue** with drag-to-reorder, play next, and save-as-playlist.
+- The interface takes its colour from the album art of whatever is playing.
 
-Built strictly in adherence with the **Sonora Product Requirements Document** and the **Desktop Music App Research Blueprint**, Sonora is:
-1. **Local-First**: Complete playback, library indexing, playlist management, queueing, favourites, and settings work offline without an account or internet connection.
-2. **Audiophile-Grade & Format-Transparent**: Exposes verified source codec, sample rate, bit depth, channels, and negotiated WASAPI endpoint output. Offers a dedicated **Audio Studio** with both standard Windows Shared output and an explicit **WASAPI Exclusive / Bit-Perfect** mode with strict DSP bypass.
-3. **Rights-Aware & Modular**: Integrates discovery only through permitted and documented paths (Jamendo API v3 for Creative Commons discovery, Navidrome / Subsonic for personal server streaming, and official handoffs for commercial catalogues). **Zero unofficial scraping or reverse-engineered endpoints.**
+## Keyboard shortcuts
 
----
+| Action | Keys |
+| --- | --- |
+| Play / pause | `Space` |
+| Next / previous song | `Ctrl` `→` / `Ctrl` `←` |
+| Skip forward / back 5 s | `Shift` `→` / `Shift` `←` |
+| Volume up / down | `Ctrl` `↑` / `Ctrl` `↓` |
+| Mute | `M` |
+| Search | `Ctrl` `K` |
+| Queue / lyrics | `Ctrl` `Q` / `Ctrl` `L` |
+| Go back | `Alt` `←` |
 
-## 🏛️ System Architecture
+## Getting started
 
-```text
-React 19 + TypeScript + Vite + Tailwind CSS 4 (Tauri 2 Desktop Shell)
-  │
-  ├── UI Shell & Stores (Zustand: Player, Library, Audio Studio, UI, Providers)
-  │     ├── Left Navigation Rail (Home, Search, Library, Playlists, Explore, Audio Studio, Settings)
-  │     ├── Responsive Workspace (Cards, sortable track tables, hero headers)
-  │     ├── Collapsible Inspector (Queue, Synced / Plain Lyrics, Audio Diagnostics)
-  │     ├── Persistent Mini-Player (Transport, Seekbar, Volume, Format Badges, Studio Shortcut)
-  │     └── Immersive Full-Player (Dynamic ambient blur backdrop, hero artwork, synced lyrics)
-  │
-  └── Rust Application Core (Tauri 2 IPC, Tokio, Rusqlite, CPAL, Symphonia, Lofty)
-        ├── Audio Engine: Symphonia multi-format decoding (FLAC, WAV, MP3, ALAC, AAC, Vorbis, Opus)
-        ├── Direct WASAPI Output: Shared Mode & Exclusive Bit-Perfect stream negotiation
-        ├── DSP Pipeline: 10-Band Graphic EQ (RBJ IIR Peaking filters), Preamp gain, ReplayGain, Soft Limiter
-        ├── Local Storage: SQLite embedded database with WAL mode and indexing
-        ├── Library Scanner: Lofty tag and embedded artwork extraction, recursive directory walker
-        ├── Metadata & Lyrics: LRCLIB API integration, local sidecar .lrc resolver
-        └── Providers: Jamendo v3 CC API, Subsonic / Navidrome Personal Server adapter
-```
+### Requirements
 
----
+- Windows 10 or 11 with WebView2
+- Node.js 18+
+- Rust (stable) with the MSVC toolchain
 
-## ✨ Features
-
-- **Multi-Format Native Decoding**: Pure Rust demuxing and decoding via Symphonia for FLAC, WAV (PCM), MP3, AAC-LC, ALAC, Vorbis, and Opus.
-- **Audio Studio**:
-  - Endpoint device selector (enumerates all Windows WASAPI devices).
-  - Mode switch: **Shared Mode** (friendly everyday Windows mixing) vs **Exclusive / Bit-Perfect Mode** (hardware DAC takeover, silences system sounds, strict DSP bypass).
-  - 10-Band Equalizer (31 Hz, 63 Hz, 125 Hz, 250 Hz, 500 Hz, 1 kHz, 2 kHz, 4 kHz, 8 kHz, 16 kHz) with audiophile presets.
-  - Preamp gain (-12 dB to +12 dB) and soft limiting.
-  - ReplayGain loudness normalization.
-  - Real-time diagnostics: buffer underrun counter, estimated latency, negotiated format.
-- **Asynchronous Incremental Library**:
-  - Scan multiple directory roots concurrently.
-  - Lofty metadata reader: Title, Artist, Album, Year, Genre, Track Number, Disc Number, and embedded cover art extraction to local thumbnail cache.
-  - SQLite persistent catalogue with full indexing.
-- **Queue & Playlists**:
-  - Persistent queue with drag/drop reordering, remove with undo, clear, and "Save as Playlist".
-  - User-created playlists and auto-curated Smart Playlists (*Lossless Master Vault*, *Recently Added*).
-- **Synchronized Lyrics**:
-  - Priority resolution: Local sidecar `.lrc` files → Embedded tags → LRCLIB API.
-  - Interactive auto-scrolling lyrics highlighted synchronously with playback timestamp.
-- **Lawful Discovery**:
-  - Jamendo API v3 integration with Creative Commons license preservation and artist attribution.
-  - Navidrome / Subsonic personal server integration for self-hosted home music collections.
-  - "Open in Provider" official handoff links for Spotify, YouTube Music, and JioSaavn.
-- **Desktop Ergonomics**:
-  - Global keyboard shortcuts (`Space` = Play/Pause, `←`/`→` = Seek 5s, `↑`/`↓` = Volume 5%, `Ctrl+Q` = Queue, `Ctrl+L` = Lyrics, `Ctrl+E` = Audio Studio).
-  - Floating track context menu.
-  - Exportable diagnostics bundle.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 18+ (tested on Node v24)
-- Rust 1.77+ (Cargo 1.99+)
-- Windows 10 / Windows 11 with WebView2
-
-### Development
+### Run in development
 
 ```bash
-# Install frontend dependencies
 npm install
-
-# Run frontend in development mode
-npm run dev
-
-# Run full desktop application with Tauri
 npm run tauri dev
 ```
 
-### Production Build
+`npm run dev` starts only the web UI in a browser. Local playback, folder scanning and streaming search need the desktop app.
+
+### Build the installer
 
 ```bash
-# Build frontend web assets
-npm run build
-
-# Build signed Windows application installer (.msi / .exe)
 npm run tauri build
 ```
 
----
+This produces `sonora.exe` and MSI/NSIS installers under `src-tauri/target/release/bundle/`.
+If `rustc` crashes while compiling the `windows` crate, limit parallel jobs: `CARGO_BUILD_JOBS=4 npm run tauri build`.
 
-## 📜 License
+### Optional setup
 
-Sonora is released under the MIT License.
-Third-party libraries used: Symphonia (MPL-2.0), Lofty (MIT/Apache-2.0), CPAL (Apache-2.0), Rusqlite (MIT), Tauri 2 (MIT/Apache-2.0).
+- **Free music (Jamendo)**: create a free app at [devportal.jamendo.com](https://devportal.jamendo.com/) and paste its client ID in Settings.
+- **Your server**: enter your Subsonic/Navidrome address and login in Settings. Only a salted token is stored, never the password.
+
+## Project layout
+
+```
+src/                  React UI
+  components/         Shell, player bar, shared UI
+  features/           One folder per screen
+  services/           Audio routing and the bridge to Rust commands
+  stores/             Zustand state (persisted to localStorage)
+src-tauri/src/
+  audio/              Decoder, DSP (EQ, preamp) and WASAPI output
+  library/            Folder scanner and tag reader
+  providers/          JioSaavn, YouTube, Jamendo and Subsonic clients
+  db/                 SQLite library database
+```
+
+## Disclaimer
+
+Sonora is an independent project and isn't affiliated with JioSaavn, YouTube or Jamendo. Use of those services is subject to their terms.
+
+## License
+
+[MIT](LICENSE). Third-party libraries include Tauri (MIT/Apache-2.0), Symphonia (MPL-2.0), Lofty (MIT/Apache-2.0), CPAL (Apache-2.0) and rusqlite (MIT).
