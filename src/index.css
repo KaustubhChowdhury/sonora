@@ -1,58 +1,182 @@
 @import "tailwindcss";
 
+/*
+ * Sonora design tokens.
+ * Tailwind v4 reads theme values from @theme (tailwind.config.js is not loaded),
+ * so every custom colour the components use must be declared here.
+ *
+ * Palette: graphite neutrals; the only saturated colour on screen comes from the
+ * current track's artwork (--ambient, set at runtime). --color-signal is the single
+ * UI accent and is reserved for playback state (progress, the playing row, active nav).
+ */
+@theme {
+  --color-bg: #16171b;
+  --color-surface: #1c1d22;
+  --color-surface-muted: #202126;
+  --color-surface-elevated: #27282e;
+  --color-raised: #2e2f36;
+  --color-line: rgb(255 255 255 / 0.07);
+  --color-line-strong: rgb(255 255 255 / 0.13);
+
+  --color-ink: #ecebe7;
+  --color-ink-2: #a6a5a9;
+  --color-ink-3: #707076;
+
+  --color-signal: #f2b544;
+  --color-signal-ink: #1a1408;
+  --color-danger: #e5675a;
+
+  --font-sans: "Schibsted Grotesk", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --radius-card: 10px;
+}
+
 @layer base {
   :root {
-    --background: #0c0d12;
-    --surface: #13151b;
-    --surface-muted: #181b23;
-    --surface-elevated: #1e222c;
-    --accent: #8b5cf6;
+    --ambient: 120 120 130;
+    color-scheme: dark;
   }
 
+  html,
   body {
-    background-color: #0c0d12;
-    color: #f4f4f5;
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
     user-select: none;
     -webkit-user-select: none;
   }
+
+  input,
+  textarea,
+  [contenteditable] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: default;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Schibsted's tabular figures are very wide; counters sit in fixed-width boxes instead,
+     so .tnum only marks numeric text and keeps lining figures. */
+  .tnum {
+    font-variant-numeric: lining-nums;
+  }
 }
 
-/* Custom minimal scrollbar */
+@utility ambient-wash {
+  background-image: linear-gradient(
+    180deg,
+    rgb(var(--ambient) / 0.32) 0%,
+    rgb(var(--ambient) / 0.08) 55%,
+    transparent 100%
+  );
+  transition: background-image 600ms ease;
+}
+
+/* Scrollbars: thin, only visible against content */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(255 255 255 / 0.09);
+  border: 3px solid transparent;
+  background-clip: padding-box;
   border-radius: 9999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgb(255 255 255 / 0.18);
+  background-clip: padding-box;
 }
 
-/* Range input slider thumb styling */
-input[type="range"]::-webkit-slider-thumb {
+/* Range inputs: a flat track whose filled part is drawn by --fill (0–100%). */
+input[type="range"].slider {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--slider-color, var(--color-ink)) 0%,
+    var(--slider-color, var(--color-ink)) var(--fill, 0%),
+    rgb(255 255 255 / 0.14) var(--fill, 0%),
+    rgb(255 255 255 / 0.14) 100%
+  );
+  cursor: pointer;
+  outline: none;
+}
+input[type="range"].slider:hover {
+  --slider-color: var(--color-signal);
+}
+input[type="range"].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
   appearance: none;
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #a78bfa;
-  cursor: pointer;
-  box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+  background: var(--color-ink);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+input[type="range"].slider.show-thumb::-webkit-slider-thumb,
+input[type="range"].slider:hover::-webkit-slider-thumb,
+input[type="range"].slider:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
 }
 
-input[type="range"]::-moz-range-thumb {
+/* Legacy range inputs that haven't been migrated to .slider */
+input[type="range"]:not(.slider)::-webkit-slider-thumb {
+  appearance: none;
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #a78bfa;
+  background: var(--color-ink);
   cursor: pointer;
-  box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
-  border: none;
+}
+
+/* Playing indicator: three bars that only move while audio is playing */
+@keyframes eq-bar {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+.eq-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.eq-bars > span {
+  width: 3px;
+  height: 100%;
+  background: var(--color-signal);
+  border-radius: 1px;
+  transform-origin: bottom;
+  animation: eq-bar 900ms ease-in-out infinite;
+}
+.eq-bars > span:nth-child(2) { animation-delay: -300ms; }
+.eq-bars > span:nth-child(3) { animation-delay: -600ms; }
+.eq-bars.paused > span { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }
