@@ -1,179 +1,172 @@
 import React from "react";
-import { motion } from "motion/react";
-import { Play, MoreHorizontal, Star, ExternalLink } from "lucide-react";
+import { Heart, MoreHorizontal, Play, Pause } from "lucide-react";
 import { Track } from "../../types/music";
 import { usePlayerStore } from "../../stores/playerStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useLibraryStore } from "../../stores/libraryStore";
-import { SourceBadge } from "./SourceBadge";
-import { AudioFormatBadge } from "./AudioFormatBadge";
-import { TauriBridge } from "../../services/tauriBridge";
-import { openYouTubeMusic } from "../../providers/youtube";
-import { openJioSaavn } from "../../providers/jiosaavn";
+import { Artwork, EqBars } from "../ui/primitives";
+import { formatTime, formatSpec, sourceLabel } from "../../lib/format";
+import { cn } from "../../lib/cn";
+
+/**
+ * Track list. Columns: # · title/artist · album · source/format · like · duration · more.
+ * Double-click (or Enter) plays; single click selects nothing — there's no multi-select yet.
+ */
+
+const GRID = "grid grid-cols-[32px_minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_32px_48px_32px] items-center gap-3";
+
+export const TrackListHeader: React.FC<{ showAlbum?: boolean }> = ({ showAlbum = true }) => (
+  <div className={cn(GRID, "h-8 px-3 border-b border-line text-[12px] text-ink-3 sticky top-0 bg-surface z-10")}>
+    <span className="text-right">#</span>
+    <span>Title</span>
+    <span>{showAlbum ? "Album" : ""}</span>
+    <span>Source</span>
+    <span />
+    <span className="text-right">Time</span>
+    <span />
+  </div>
+);
 
 interface TrackRowProps {
   track: Track;
   index: number;
   playlistContext?: Track[];
+  showAlbum?: boolean;
+  /** Extra items for the row's "more" menu, e.g. "Remove from playlist" */
+  onRemove?: () => void;
 }
 
-export const TrackRow: React.FC<TrackRowProps> = ({
-  track,
-  index,
-  playlistContext,
-}) => {
-  const { currentTrack, isPlaying, playTrack, togglePlayPause } = usePlayerStore();
-  const { openContextMenu, showToast } = useUiStore();
-  const { toggleTrackFavourite } = useLibraryStore();
+export const TrackRow: React.FC<TrackRowProps> = ({ track, index, playlistContext, showAlbum = true }) => {
+  const currentId = usePlayerStore((s) => s.currentTrack?.id);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const { playTrack, togglePlayPause } = usePlayerStore.getState();
+  const { openContextMenu, navigate } = useUiStore();
+  const liked = useLibraryStore((s) => s.favourites.some((f) => f.id === track.id));
+  const toggleLike = useLibraryStore((s) => s.toggleTrackFavourite);
 
-  const isCurrent = currentTrack?.id === track.id;
-  const isRowPlaying = isCurrent && isPlaying;
-
-  const handleAction = (e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (isCurrent) {
-      togglePlayPause();
-    } else {
-      playTrack(track, playlistContext);
-      showToast(`Playing "${track.title}"`);
-    }
-  };
-
-  const handleFavourite = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleTrackFavourite(track.id);
-    TauriBridge.toggleFavourite(track.id, !track.isFavourite);
-    showToast(
-      track.isFavourite
-        ? `Removed "${track.title}" from favourites`
-        : `Added "${track.title}" to favourites`
-    );
-  };
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    openContextMenu(e.clientX, e.clientY, track);
-  };
-
-  const formatDuration = (ms: number) => {
-    const totalSec = Math.floor(ms / 1000);
-    const mins = Math.floor(totalSec / 60);
-    const secs = totalSec % 60;
-    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-  };
+  const isCurrent = currentId === track.id;
+  const play = () => (isCurrent ? togglePlayPause() : playTrack(track, playlistContext));
+  const spec = formatSpec(track);
 
   return (
-    <motion.div
-      onDoubleClick={handleAction}
-      onContextMenu={handleContextMenu}
-      whileHover={{ scale: 1.002 }}
-      transition={{ duration: 0.12 }}
-      className={`group grid grid-cols-[36px_1fr_1fr_120px_140px_70px] items-center px-3 py-2 rounded-xl text-sm cursor-pointer select-none border transition-colors ${
-        isCurrent
-          ? "bg-purple-500/10 hover:bg-purple-500/15 border-purple-500/20 text-white"
-          : "border-transparent hover:bg-white/[0.04] text-zinc-300 hover:text-white"
-      }`}
+    <div
+      role="row"
+      tabIndex={0}
+      onDoubleClick={play}
+      onKeyDown={(e) => e.key === "Enter" && play()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY, track);
+      }}
+      className={cn(
+        GRID,
+        "group h-14 px-3 rounded-md text-[13px] select-none focus:outline-none focus-visible:bg-white/[0.06]",
+        isCurrent ? "bg-white/[0.05]" : "hover:bg-white/[0.04]"
+      )}
     >
-      {/* Index or Play Button */}
-      <div className="flex items-center justify-center">
-        {isRowPlaying ? (
-          <div className="flex items-end gap-[2px] h-3.5 w-3.5 cursor-pointer" onClick={handleAction}>
-            <span className="w-1 bg-[#9b7bff] animate-pulse h-full rounded-sm" />
-            <span className="w-1 bg-[#9b7bff] animate-pulse delay-75 h-2 rounded-sm" />
-            <span className="w-1 bg-[#9b7bff] animate-pulse delay-150 h-3 rounded-sm" />
-          </div>
-        ) : (
-          <>
-            <span className="group-hover:hidden text-xs font-mono text-zinc-500">
-              {index + 1}
-            </span>
-            <button
-              onClick={handleAction}
-              className="hidden group-hover:flex items-center justify-center w-6 h-6 rounded-full bg-white text-zinc-950 shadow hover:scale-105 active:scale-95 transition-transform"
-            >
-              <Play className="w-3 h-3 fill-current ml-0.5" />
-            </button>
-          </>
-        )}
+      <div className="flex justify-end items-center">
+        <span className={cn("tnum text-ink-3 group-hover:hidden", isCurrent && "hidden")}>{index + 1}</span>
+        {isCurrent && <span className="group-hover:hidden"><EqBars playing={isPlaying} /></span>}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            play();
+          }}
+          aria-label={isCurrent && isPlaying ? "Pause" : `Play ${track.title}`}
+          className="hidden group-hover:flex w-6 h-6 items-center justify-center text-ink"
+        >
+          {isCurrent && isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
+        </button>
       </div>
 
-      {/* Title & Artists */}
-      <div className="flex items-center gap-3 min-w-0 pr-4">
-        {track.artworkUrl ? (
-          <img
-            src={track.artworkUrl}
-            alt={track.title}
-            className="w-10 h-10 rounded-lg object-cover bg-zinc-800 shrink-0 shadow-sm"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-lg bg-zinc-800 shrink-0 flex items-center justify-center text-zinc-600 font-mono text-xs">
-            ♪
-          </div>
-        )}
+      <div className="flex items-center gap-3 min-w-0">
+        <Artwork src={track.artworkUrl} className="w-10 h-10" rounded="rounded" />
         <div className="min-w-0">
-          <p
-            className={`font-medium truncate ${
-              isCurrent ? "text-purple-300 font-semibold" : "text-zinc-100"
-            }`}
-          >
-            {track.title}
-          </p>
-          <p className="text-xs text-zinc-400 truncate">
-            {track.artists.join(", ")}
+          <p className={cn("truncate font-medium", isCurrent ? "text-signal" : "text-ink")}>{track.title}</p>
+          <p className="truncate text-[12px] text-ink-2">
+            {track.artists.map((a, i) => (
+              <React.Fragment key={a}>
+                {i > 0 && ", "}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate("artist-detail", { artistId: `artist-${a}` });
+                  }}
+                  className="hover:text-ink hover:underline underline-offset-2"
+                >
+                  {a}
+                </button>
+              </React.Fragment>
+            ))}
           </p>
         </div>
       </div>
 
-      {/* Album */}
-      <div className="text-xs text-zinc-400 truncate pr-4">
-        {track.album || "—"}
+      <div className="truncate text-ink-2">
+        {showAlbum && track.album ? (
+          track.albumId ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate("album-detail", { albumId: track.albumId });
+              }}
+              className="truncate max-w-full text-left hover:text-ink hover:underline underline-offset-2"
+            >
+              {track.album}
+            </button>
+          ) : (
+            track.album
+          )
+        ) : null}
       </div>
 
-      {/* Source Badge */}
-      <div className="flex items-center">
-        <SourceBadge
-          sourceKind={track.sourceKind}
-          providerId={track.providerId}
-          attribution={track.attribution}
-        />
+      <div className="truncate text-[12px] text-ink-3" title={track.attribution}>
+        {sourceLabel(track.providerId, track.sourceKind)}
+        {spec && <span className="tnum text-ink-3/80">{`  ${spec}`}</span>}
       </div>
 
-      {/* Audio Format Spec */}
-      <div className="flex items-center">
-        <AudioFormatBadge
-          compact
-          codec={track.codec}
-          sampleRate={track.sampleRate}
-          bitDepth={track.bitDepth}
-        />
-      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleLike(track);
+        }}
+        aria-label={liked ? "Remove from liked songs" : "Add to liked songs"}
+        className={cn(
+          "w-8 h-8 flex items-center justify-center rounded-full transition-opacity",
+          liked ? "text-signal" : "text-ink-3 hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        )}
+      >
+        <Heart className={cn("w-4 h-4", liked && "fill-current")} />
+      </button>
 
-      {/* Duration & Actions */}
-      <div className="flex items-center justify-end gap-2 text-xs font-mono text-zinc-400">
-        <button
-          onClick={handleFavourite}
-          className={`p-1 rounded hover:text-amber-400 transition-colors ${
-            track.isFavourite
-              ? "text-amber-400"
-              : "opacity-0 group-hover:opacity-100 text-zinc-500"
-          }`}
-        >
-          <Star className={`w-3.5 h-3.5 ${track.isFavourite ? "fill-current" : ""}`} />
-        </button>
+      <span className="text-right tnum text-ink-3">{formatTime(track.durationMs)}</span>
 
-        <span>{formatDuration(track.durationMs)}</span>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            openContextMenu(e.clientX, e.clientY, track);
-          }}
-          className="p-1 rounded opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white transition-all"
-        >
-          <MoreHorizontal className="w-4 h-4" />
-        </button>
-      </div>
-    </motion.div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          openContextMenu(r.left, r.bottom + 4, track);
+        }}
+        aria-label="More options"
+        className="w-8 h-8 flex items-center justify-center rounded-full text-ink-3 hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+      >
+        <MoreHorizontal className="w-4 h-4" />
+      </button>
+    </div>
   );
 };
+
+export const TrackList: React.FC<{ tracks: Track[]; showAlbum?: boolean; className?: string }> = ({
+  tracks,
+  showAlbum = true,
+  className,
+}) => (
+  <div role="table" className={className}>
+    <TrackListHeader showAlbum={showAlbum} />
+    <div className="pt-1">
+      {tracks.map((t, i) => (
+        <TrackRow key={`${t.id}-${i}`} track={t} index={i} playlistContext={tracks} showAlbum={showAlbum} />
+      ))}
+    </div>
+  </div>
+);

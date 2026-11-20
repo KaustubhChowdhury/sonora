@@ -1,211 +1,218 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Play,
+  ListStart,
+  ListEnd,
+  Heart,
   ListPlus,
-  Radio,
-  Star,
+  ChevronRight,
+  MicVocal,
+  Disc3,
   ExternalLink,
-  Sliders,
-  FileText,
-  Copy,
-  FolderOpen,
+  Info,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
 import { useLibraryStore } from "../../stores/libraryStore";
 import { TauriBridge } from "../../services/tauriBridge";
+import { cn } from "../../lib/cn";
+
+const Item: React.FC<{
+  icon: React.ReactNode;
+  onClick?: () => void;
+  children: React.ReactNode;
+  danger?: boolean;
+  trailing?: React.ReactNode;
+  onMouseEnter?: () => void;
+}> = ({ icon, onClick, children, danger, trailing, onMouseEnter }) => (
+  <button
+    role="menuitem"
+    onClick={onClick}
+    onMouseEnter={onMouseEnter}
+    className={cn(
+      "w-full h-8 flex items-center gap-3 px-2.5 rounded-md text-left text-[13px] transition-colors",
+      danger ? "text-danger hover:bg-danger/10" : "text-ink hover:bg-white/[0.07]"
+    )}
+  >
+    <span className="w-4 h-4 shrink-0 text-ink-2 [&>svg]:w-4 [&>svg]:h-4">{icon}</span>
+    <span className="flex-1 truncate">{children}</span>
+    {trailing}
+  </button>
+);
+
+const Divider = () => <div className="my-1 h-px bg-line" />;
 
 export const ContextMenu: React.FC = () => {
-  const { contextMenu, closeContextMenu, showToast, toggleInspector, navigate } = useUiStore();
+  const { contextMenu, closeContextMenu, showToast, setInspectorTab, navigate, openNewPlaylist, activeRoute, selectedPlaylistId } =
+    useUiStore();
   const { playTrack, addToQueue } = usePlayerStore();
-  const { toggleTrackFavourite } = useLibraryStore();
-  const menuRef = useRef<HTMLDivElement>(null);
+  const { toggleTrackFavourite, favourites, customPlaylists, addTrackToCustomPlaylist, removeTrackFromCustomPlaylist } =
+    useLibraryStore();
+  const ref = useRef<HTMLDivElement>(null);
+  const subRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [submenu, setSubmenu] = useState(false);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        closeContextMenu();
-      }
-    };
-    if (contextMenu.isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
+    if (!contextMenu.isOpen) return;
+    setSubmenu(false);
+    const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && closeContextMenu();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeContextMenu();
+    const onScroll = () => closeContextMenu();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("scroll", onScroll, true);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("scroll", onScroll, true);
     };
-  }, [contextMenu.isOpen, closeContextMenu]);
+  }, [contextMenu.isOpen, contextMenu.x, contextMenu.y, closeContextMenu]);
+
+  // Keep the menu on screen
+  useLayoutEffect(() => {
+    if (!contextMenu.isOpen || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setPos({
+      x: Math.max(8, Math.min(contextMenu.x, window.innerWidth - r.width - 8)),
+      y: Math.max(8, Math.min(contextMenu.y, window.innerHeight - r.height - 8)),
+    });
+  }, [contextMenu.isOpen, contextMenu.x, contextMenu.y]);
 
   if (!contextMenu.isOpen || !contextMenu.track) return null;
-
   const track = contextMenu.track;
+  const liked = favourites.some((f) => f.id === track.id);
+  const inPlaylist =
+    activeRoute === "playlists" &&
+    selectedPlaylistId &&
+    customPlaylists.find((p) => p.id === selectedPlaylistId)?.tracks.some((t) => t.id === track.id);
 
-  const handlePlayNow = () => {
-    playTrack(track);
+  const run = (fn: () => void) => () => {
+    fn();
     closeContextMenu();
   };
 
-  const handlePlayNext = () => {
-    addToQueue(track, true);
-    showToast(`Added "${track.title}" to play next`);
-    closeContextMenu();
-  };
+  const externalUrl =
+    track.providerId === "youtube" && track.youtubeVideoId
+      ? `https://music.youtube.com/watch?v=${track.youtubeVideoId}`
+      : track.providerId === "jiosaavn"
+      ? `https://www.jiosaavn.com/search/song/${encodeURIComponent(`${track.title} ${track.artists[0] ?? ""}`)}`
+      : null;
 
-  const handleAddToQueue = () => {
-    addToQueue(track, false);
-    showToast(`Added "${track.title}" to queue`);
-    closeContextMenu();
-  };
-
-  const handleToggleFavourite = () => {
-    toggleTrackFavourite(track.id);
-    TauriBridge.toggleFavourite(track.id, !track.isFavourite);
-    showToast(
-      track.isFavourite
-        ? `Removed "${track.title}" from favourites`
-        : `Added "${track.title}" to favourites`
-    );
-    closeContextMenu();
-  };
-
-  const handleInspectAudio = () => {
-    toggleInspector("track-info");
-    closeContextMenu();
-  };
-
-  const handleInspectLyrics = () => {
-    toggleInspector("lyrics");
-    closeContextMenu();
-  };
-
-  const handleHandoff = (provider: "youtube" | "spotify" | "jiosaavn") => {
-    const q = encodeURIComponent(`${track.title} ${track.artists.join(" ")}`);
-    let url = "";
-    if (provider === "youtube") {
-      url = `https://music.youtube.com/search?q=${q}`;
-    } else if (provider === "spotify") {
-      url = `https://open.spotify.com/search/${q}`;
-    } else if (provider === "jiosaavn") {
-      url = `https://www.jiosaavn.com/search/${q}`;
-    }
-    TauriBridge.openExternal(url);
-    showToast(`Opening "${track.title}" in ${provider.toUpperCase()}`);
-    closeContextMenu();
-  };
-
-  const handleCopySpecs = () => {
-    const specs = `${track.title} - ${track.artists.join(", ")} [${track.album || ""}]\nFormat: ${
-      track.codec || "Audio"
-    } ${track.sampleRate || 44100}Hz / ${track.bitDepth || 16}-bit\nSource: ${track.sourceKind}`;
-    navigator.clipboard?.writeText(specs);
-    showToast("Technical audio specs copied to clipboard");
-    closeContextMenu();
-  };
+  const subLeft = pos.x + 232 + 220 > window.innerWidth;
 
   return (
     <div
-      ref={menuRef}
-      style={{
-        top: Math.min(contextMenu.y, window.innerHeight - 340),
-        left: Math.min(contextMenu.x, window.innerWidth - 240),
+      ref={ref}
+      role="menu"
+      style={{ top: pos.y, left: pos.x }}
+      className="fixed z-[70] w-[232px] p-1 rounded-lg bg-surface-elevated border border-line-strong shadow-2xl shadow-black/50"
+      onContextMenu={(e) => e.preventDefault()}
+      onMouseOver={(e) => {
+        // Close the playlist submenu when another item is hovered (not on mouseleave, which fires
+        // while the pointer travels diagonally toward the submenu).
+        if (submenu && !subRef.current?.contains(e.target as Node) && (e.target as HTMLElement).closest("[role=menuitem]")) setSubmenu(false);
       }}
-      className="fixed z-50 w-56 bg-surface-elevated/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-1.5 text-xs text-zinc-200 animate-in fade-in zoom-in-95 duration-100"
     >
-      <div className="px-3 py-1.5 border-b border-white/5 mb-1">
-        <p className="font-semibold text-zinc-100 truncate">{track.title}</p>
-        <p className="text-[11px] text-zinc-400 truncate">{track.artists.join(", ")}</p>
-      </div>
-
-      <button
-        onClick={handlePlayNow}
-        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors"
+      <Item icon={<Play />} onClick={run(() => playTrack(track))}>
+        Play
+      </Item>
+      <Item
+        icon={<ListStart />}
+        onClick={run(() => {
+          addToQueue(track, true);
+          showToast("Playing next");
+        })}
       >
-        <Play className="w-3.5 h-3.5 text-zinc-300" />
-        <span>Play Now</span>
-      </button>
-
-      <button
-        onClick={handlePlayNext}
-        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors"
+        Play next
+      </Item>
+      <Item
+        icon={<ListEnd />}
+        onClick={run(() => {
+          addToQueue(track);
+          showToast("Added to queue");
+        })}
       >
-        <Radio className="w-3.5 h-3.5 text-zinc-300" />
-        <span>Play Next</span>
-      </button>
-
-      <button
-        onClick={handleAddToQueue}
-        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors"
-      >
-        <ListPlus className="w-3.5 h-3.5 text-zinc-300" />
-        <span>Add to Queue</span>
-      </button>
-
-      <button
-        onClick={handleToggleFavourite}
-        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors"
-      >
-        <Star
-          className={`w-3.5 h-3.5 ${
-            track.isFavourite ? "text-amber-400 fill-amber-400" : "text-zinc-300"
-          }`}
-        />
-        <span>{track.isFavourite ? "Remove Favourite" : "Add to Favourites"}</span>
-      </button>
-
-      <div className="my-1 border-t border-white/5" />
-
-      <button
-        onClick={handleInspectAudio}
-        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors"
-      >
-        <Sliders className="w-3.5 h-3.5 text-zinc-300" />
-        <span>Track Info & Diagnostics</span>
-      </button>
-
-      <button
-        onClick={handleInspectLyrics}
-        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors"
-      >
-        <FileText className="w-3.5 h-3.5 text-zinc-300" />
-        <span>View Lyrics</span>
-      </button>
-
-      <button
-        onClick={handleCopySpecs}
-        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors"
-      >
-        <Copy className="w-3.5 h-3.5 text-zinc-300" />
-        <span>Copy Audio Specs</span>
-      </button>
-
-      <div className="my-1 border-t border-white/5" />
-
-      {/* Official Provider Handoff (YouTube Music / Spotify / JioSaavn) */}
-      <div className="px-2.5 py-1 text-[10px] uppercase font-semibold text-zinc-500 tracking-wider">
-        Open in Provider
-      </div>
-      <div className="flex items-center gap-1 px-1">
-        <button
-          onClick={() => handleHandoff("youtube")}
-          title="Open in YouTube Music"
-          className="flex-1 py-1 rounded hover:bg-red-950/40 text-[11px] text-zinc-300 hover:text-red-400 border border-white/5 text-center transition-colors"
+        Add to queue
+      </Item>
+      <Divider />
+      <Item icon={<Heart className={cn(liked && "fill-current text-signal")} />} onClick={run(() => toggleTrackFavourite(track))}>
+        {liked ? "Remove from liked songs" : "Add to liked songs"}
+      </Item>
+      <div className="relative" ref={subRef}>
+        <Item
+          icon={<ListPlus />}
+          onMouseEnter={() => setSubmenu(true)}
+          onClick={() => setSubmenu(true)}
+          trailing={<ChevronRight className="w-4 h-4 text-ink-3" />}
         >
-          YouTube
-        </button>
-        <button
-          onClick={() => handleHandoff("spotify")}
-          title="Open in Spotify"
-          className="flex-1 py-1 rounded hover:bg-emerald-950/40 text-[11px] text-zinc-300 hover:text-emerald-400 border border-white/5 text-center transition-colors"
-        >
-          Spotify
-        </button>
-        <button
-          onClick={() => handleHandoff("jiosaavn")}
-          title="Open in JioSaavn"
-          className="flex-1 py-1 rounded hover:bg-cyan-950/40 text-[11px] text-zinc-300 hover:text-cyan-400 border border-white/5 text-center transition-colors"
-        >
-          JioSaavn
-        </button>
+          Add to playlist
+        </Item>
+        {submenu && (
+          <div
+            className={cn(
+              "absolute top-[-4px] w-[220px] max-h-[300px] overflow-y-auto p-1 rounded-lg bg-surface-elevated border border-line-strong shadow-2xl shadow-black/50",
+              subLeft ? "right-full mr-1" : "left-full ml-1"
+            )}
+          >
+            <Item icon={<Plus />} onClick={run(() => openNewPlaylist([track]))}>
+              New playlist
+            </Item>
+            {customPlaylists.length > 0 && <Divider />}
+            {customPlaylists.map((pl) => (
+              <Item
+                key={pl.id}
+                icon={<span />}
+                onClick={run(() => {
+                  const n = addTrackToCustomPlaylist(pl.id, track);
+                  showToast(n ? `Added to “${pl.name}”` : `Already in “${pl.name}”`);
+                })}
+              >
+                {pl.name}
+              </Item>
+            ))}
+          </div>
+        )}
       </div>
+      {inPlaylist && (
+        <Item
+          icon={<Trash2 />}
+          danger
+          onClick={run(() => {
+            removeTrackFromCustomPlaylist(selectedPlaylistId!, track.id);
+            showToast("Removed from playlist");
+          })}
+        >
+          Remove from this playlist
+        </Item>
+      )}
+      <Divider />
+      {track.artists[0] && (
+        <Item icon={<MicVocal />} onClick={run(() => navigate("artist-detail", { artistId: `artist-${track.artists[0]}` }))}>
+          Go to artist
+        </Item>
+      )}
+      {track.albumId && (
+        <Item icon={<Disc3 />} onClick={run(() => navigate("album-detail", { albumId: track.albumId }))}>
+          Go to album
+        </Item>
+      )}
+      <Item
+        icon={<Info />}
+        onClick={run(() => {
+          if (usePlayerStore.getState().currentTrack?.id !== track.id) playTrack(track);
+          setInspectorTab("track-info");
+        })}
+      >
+        File and format details
+      </Item>
+      {externalUrl && (
+        <Item icon={<ExternalLink />} onClick={run(() => TauriBridge.openExternal(externalUrl))}>
+          Open in {track.providerId === "youtube" ? "YouTube Music" : "JioSaavn"}
+        </Item>
+      )}
     </div>
   );
 };
