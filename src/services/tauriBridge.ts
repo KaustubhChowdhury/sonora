@@ -2,137 +2,34 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Track, SourceKind, AudioDevice, AudioOutputStatus, DspSettings, LyricsData, FolderScanStatus } from "../types/music";
 
-if (typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)) {
-  (window as any).isTauri = true;
+// Don't assign window.isTauri: Tauri 2 defines it as read-only, and writing to it
+// throws at module load in the packaged app (blank window).
+export const isTauri = () =>
+  typeof window !== "undefined" &&
+  ("__TAURI_INTERNALS__" in window || "__TAURI__" in window || Boolean((window as any).isTauri));
+
+export class JamendoError extends Error {
+  constructor(public kind: "missing-key" | "network" | "api", message: string) {
+    super(message);
+  }
 }
 
-export const isTauri = () => {
-  return (
-    typeof window !== "undefined" &&
-    ("__TAURI_INTERNALS__" in window ||
-      "__TAURI__" in window ||
-      Boolean((window as any).isTauri))
-  );
+const JAMENDO_KEY = "sonora-jamendo-client-id";
+export const getJamendoClientId = (): string => {
+  try {
+    return localStorage.getItem(JAMENDO_KEY)?.trim() || "";
+  } catch {
+    return "";
+  }
 };
-
-// Initial built-in audiophile demo catalogue for immediate testing and listening
-export const SAMPLE_AUDIO_TRACKS: Track[] = [
-  {
-    id: "sample-1",
-    title: "Celestial Architecture (Acoustic Master)",
-    artists: ["Aethelgard Chamber Ensemble"],
-    album: "Resonance in Monochrome",
-    albumId: "album-resonance",
-    durationMs: 274000,
-    sourceKind: "local",
-    providerId: "local",
-    codec: "FLAC",
-    sampleRate: 96000,
-    bitDepth: 24,
-    channels: 2,
-    bitrate: 2822,
-    fileSize: 96800000,
-    year: 2025,
-    genre: "Neoclassical / Ambient",
-    trackNumber: 1,
-    discNumber: 1,
-    isFavourite: true,
-    artworkUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80",
-    downloadAllowed: true,
-  },
-  {
-    id: "sample-2",
-    title: "Subterranean Pulse (Modular Synthesis)",
-    artists: ["Kuroshio"],
-    album: "Vapour & Iron",
-    albumId: "album-vapour",
-    durationMs: 341000,
-    sourceKind: "local",
-    providerId: "local",
-    codec: "WAV",
-    sampleRate: 192000,
-    bitDepth: 24,
-    channels: 2,
-    bitrate: 9216,
-    fileSize: 393000000,
-    year: 2026,
-    genre: "Minimal Techno / Modular",
-    trackNumber: 2,
-    discNumber: 1,
-    isFavourite: false,
-    artworkUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80",
-    downloadAllowed: true,
-  },
-  {
-    id: "sample-3",
-    title: "Midnight Blue (Live at Blue Note Tokyo)",
-    artists: ["Takeshi Morita Quartet"],
-    album: "Tokyo Sessions",
-    albumId: "album-tokyo-sessions",
-    durationMs: 395000,
-    sourceKind: "local",
-    providerId: "local",
-    codec: "FLAC",
-    sampleRate: 88200,
-    bitDepth: 24,
-    channels: 2,
-    bitrate: 2510,
-    fileSize: 124000000,
-    year: 2024,
-    genre: "Post-Bop Jazz",
-    trackNumber: 4,
-    discNumber: 1,
-    isFavourite: true,
-    artworkUrl: "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&auto=format&fit=crop&q=80",
-    downloadAllowed: true,
-  },
-  {
-    id: "sample-4",
-    title: "Nordic Frost (Symphonic Poem)",
-    artists: ["Bergen Philharmonic", "Elin Solberg"],
-    album: "Glacial Horizons",
-    albumId: "album-glacial",
-    durationMs: 482000,
-    sourceKind: "local",
-    providerId: "local",
-    codec: "ALAC",
-    sampleRate: 48000,
-    bitDepth: 24,
-    channels: 2,
-    bitrate: 1450,
-    fileSize: 87000000,
-    year: 2025,
-    genre: "Classical / Orchestral",
-    trackNumber: 1,
-    discNumber: 1,
-    isFavourite: false,
-    artworkUrl: "https://images.unsplash.com/photo-1483412033650-1015ddeb83d1?w=800&auto=format&fit=crop&q=80",
-    downloadAllowed: true,
-  },
-  {
-    id: "sample-5",
-    title: "Ephemeral Echoes",
-    artists: ["Starlight Project"],
-    album: "Open Horizons (CC Discovery)",
-    albumId: "album-open-horizons",
-    durationMs: 215000,
-    sourceKind: "stream",
-    providerId: "jamendo",
-    providerTrackId: "189201",
-    codec: "MP3",
-    sampleRate: 44100,
-    bitDepth: 16,
-    channels: 2,
-    bitrate: 320,
-    year: 2024,
-    genre: "Indie Pop",
-    artworkUrl: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80",
-    licenseUrl: "https://creativecommons.org/licenses/by-sa/3.0/",
-    attribution: "CC BY-SA 3.0 via Jamendo - Starlight Project",
-    downloadAllowed: false,
-    cachingAllowed: false,
-  },
-];
+export const setJamendoClientId = (id: string) => {
+  try {
+    if (id.trim()) localStorage.setItem(JAMENDO_KEY, id.trim());
+    else localStorage.removeItem(JAMENDO_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+};
 
 export class TauriBridge {
   static async play(path: string): Promise<void> {
@@ -257,6 +154,21 @@ export class TauriBridge {
     return null;
   }
 
+  /** Position and transport state of the native engine, or null outside Tauri / on error. */
+  static async getEnginePosition(): Promise<{ isPlaying: boolean; positionMs: number; durationMs: number } | null> {
+    if (!isTauri()) return null;
+    try {
+      const raw = await invoke<any>("get_playback_status");
+      return {
+        isPlaying: Boolean(raw.is_playing),
+        positionMs: Number(raw.current_position_ms) || 0,
+        durationMs: Number(raw.duration_ms) || 0,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   static async getAudioDevices(): Promise<AudioDevice[]> {
     if (isTauri()) {
       try {
@@ -276,7 +188,7 @@ export class TauriBridge {
     return [
       {
         id: "default-wasapi",
-        name: "Realtek High Definition Audio (Default WASAPI)",
+        name: "System default output",
         isDefault: true,
         sampleRates: [44100, 48000, 96000, 192000],
         channels: 2,
@@ -311,10 +223,10 @@ export class TauriBridge {
     return {
       isScanning: false,
       currentFolder: folderPath,
-      scannedFiles: 24,
-      totalCandidates: 24,
-      errorCount: 0,
-      errors: [],
+      scannedFiles: 0,
+      totalCandidates: 0,
+      errorCount: 1,
+      errors: ["Folder scanning needs the desktop app."],
     };
   }
 
@@ -354,7 +266,7 @@ export class TauriBridge {
         console.error("Failed to load tracks from SQLite:", err);
       }
     }
-    return SAMPLE_AUDIO_TRACKS;
+    return [];
   }
 
   static async getLibraryFolders(): Promise<string[]> {
@@ -365,7 +277,7 @@ export class TauriBridge {
         return [];
       }
     }
-    return ["C:\\Users\\Music\\Lossless Vault", "E:\\Audio Masters"];
+    return [];
   }
 
   static async toggleFavourite(trackId: string, isFav: boolean): Promise<void> {
@@ -408,53 +320,92 @@ export class TauriBridge {
       }
     }
 
-    // High quality demo timed lyrics for the ambient master track
-    return {
-      source: "embedded",
-      isSynced: true,
-      syncedLines: [
-        { timeMs: 4000, text: "A resonant stillness descending over the valley" },
-        { timeMs: 14000, text: "Strings breathing into the cool mountain air" },
-        { timeMs: 28000, text: "Echoes of wood and bow vibrating in unison" },
-        { timeMs: 46000, text: "Harmonics rising through the morning mist" },
-        { timeMs: 68000, text: "Each note suspended in pristine space" },
-        { timeMs: 92000, text: "The cellos take the ancient theme" },
-        { timeMs: 120000, text: "Deep resonance vibrating through the timber" },
-        { timeMs: 154000, text: "A quiet cadence returns to silence" },
-      ],
-    };
+    return { source: "none", isSynced: false };
   }
 
-  static async searchJamendo(query: string, limit = 20): Promise<Track[]> {
-    if (isTauri()) {
-      try {
-        const items = await invoke<any[]>("search_jamendo", { query, limit });
-        return items.map((item) => ({
-          id: item.id,
-          title: item.name,
-          artists: [item.artist_name],
-          album: item.album_name || "Jamendo Release",
-          durationMs: (item.duration || 180) * 1000,
-          sourceKind: "stream" as SourceKind,
-          providerId: "jamendo",
-          providerTrackId: item.id,
-          streamUrl: item.audio,
-          codec: "MP3",
-          sampleRate: 44100,
-          bitDepth: 16,
-          bitrate: 320,
-          channels: 2,
-          artworkUrl: item.image,
-          licenseUrl: item.license_ccurl || "https://creativecommons.org/licenses/by-sa/3.0/",
-          attribution: `CC via Jamendo - ${item.artist_name}`,
-          downloadAllowed: item.audiodownload_allowed,
-          cachingAllowed: false,
-        }));
-      } catch (err) {
-        console.error("search_jamendo failed:", err);
-      }
+  /**
+   * Jamendo (Creative Commons music). Called directly from the webview — the API allows CORS —
+   * with the user's own client ID from Settings, since a shared key gets rate-limited or suspended.
+   * Throws JamendoError so the UI can say what's wrong instead of showing an empty page.
+   */
+  static async searchJamendo(query: string, limit = 20, tags?: string): Promise<Track[]> {
+    const clientId = getJamendoClientId();
+    if (!clientId) throw new JamendoError("missing-key", "Add a Jamendo client ID in Settings to browse free music.");
+    const params = new URLSearchParams({
+      client_id: clientId,
+      format: "json",
+      limit: String(limit),
+      audioformat: "mp32",
+      imagesize: "300",
+      include: "musicinfo",
+    });
+    if (query.trim()) params.set("namesearch", query.trim());
+    else params.set("order", "popularity_week");
+    if (tags) params.set("tags", tags);
+
+    let body: any;
+    try {
+      const res = await fetch(`https://api.jamendo.com/v3.0/tracks/?${params}`);
+      body = await res.json();
+    } catch {
+      throw new JamendoError("network", "Couldn't reach Jamendo. Check your internet connection.");
     }
-    return [];
+    if (body?.headers?.status !== "success") {
+      throw new JamendoError("api", `Jamendo refused the request: ${body?.headers?.error_message || "unknown error"}`);
+    }
+    return (body.results as any[]).map((item) => ({
+      id: `jamendo_${item.id}`,
+      title: item.name,
+      artists: [item.artist_name],
+      album: item.album_name || undefined,
+      durationMs: (Number(item.duration) || 0) * 1000,
+      sourceKind: "stream" as SourceKind,
+      providerId: "jamendo",
+      providerTrackId: String(item.id),
+      streamUrl: item.audio,
+      codec: "MP3",
+      sampleRate: 44100,
+      bitrate: 320,
+      channels: 2,
+      artworkUrl: item.album_image || item.image,
+      licenseUrl: item.license_ccurl,
+      attribution: `${item.artist_name}, via Jamendo (Creative Commons)`,
+      downloadAllowed: Boolean(item.audiodownload_allowed),
+      cachingAllowed: false,
+    }));
+  }
+
+  static async testSubsonic(cfg: { serverUrl: string; username: string; token: string; salt: string }): Promise<string> {
+    if (!isTauri()) throw new Error("Connecting to a server needs the desktop app.");
+    return await invoke<string>("test_subsonic_connection", cfg);
+  }
+
+  static async searchSubsonic(
+    cfg: { serverUrl: string; username: string; token: string; salt: string },
+    query: string
+  ): Promise<Track[]> {
+    if (!isTauri() || !cfg.serverUrl) return [];
+    try {
+      const items = await invoke<any[]>("search_subsonic", { ...cfg, query });
+      return items.map((it) => ({
+        id: `subsonic_${it.id}`,
+        title: it.title,
+        artists: [it.artist],
+        album: it.album,
+        durationMs: it.duration_ms,
+        sourceKind: "personal-server" as SourceKind,
+        providerId: "subsonic",
+        providerTrackId: it.id,
+        streamUrl: it.stream_url,
+        codec: it.content_type?.split("/")[1]?.toUpperCase(),
+        bitrate: it.bit_rate ?? undefined,
+        year: it.year ?? undefined,
+        artworkUrl: it.cover_art_url ?? undefined,
+      }));
+    } catch (err) {
+      console.error("search_subsonic failed:", err);
+      return [];
+    }
   }
 
   static async searchJioSaavn(query: string, limit = 20): Promise<Track[]> {
