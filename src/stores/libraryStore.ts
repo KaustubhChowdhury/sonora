@@ -13,6 +13,15 @@ export interface CustomPlaylist {
   updatedAt: string;
 }
 
+/** Per-song listening record used for recommendations. */
+export interface TrackStat {
+  track: Track;
+  plays: number;
+  /** Plays abandoned in the first 30 seconds */
+  skips: number;
+  lastPlayed: number;
+}
+
 export type LibraryView = "songs" | "albums" | "artists" | "folders" | "favourites" | "history";
 export type SortKey = "title" | "artist" | "album" | "duration" | "year" | "dateAdded";
 
@@ -26,6 +35,7 @@ interface LibraryState {
   recentlyPlayed: Track[];
   customPlaylists: CustomPlaylist[];
   favourites: Track[];
+  stats: Record<string, TrackStat>;
 
   activeView: LibraryView;
   viewMode: "grid" | "list";
@@ -39,6 +49,7 @@ interface LibraryState {
   addTracks: (newTracks: Track[]) => void;
 
   recordTrackPlayed: (track: Track) => void;
+  recordSkip: (track: Track) => void;
   clearRecentlyPlayed: () => void;
   createCustomPlaylist: (name: string, description?: string) => CustomPlaylist;
   renameCustomPlaylist: (id: string, name: string) => void;
@@ -64,6 +75,56 @@ interface LibraryState {
 }
 
 const now = () => new Date().toISOString();
+
+const MAX_STATS = 400;
+function pruneStats(stats: Record<string, TrackStat>) {
+  const entries = Object.entries(stats);
+  if (entries.length <= MAX_STATS) return stats;
+  entries.sort((a, b) => b[1].lastPlayed - a[1].lastPlayed);
+  return Object.fromEntries(entries.slice(0, MAX_STATS));
+}
+
+const DAY = 86_400_000;
+/** How much a song reflects your current taste: plays, minus skips, fading over ~3 weeks. */
+export function tasteScore(st: TrackStat, at = Date.now()) {
+  const recency = Math.exp(-(at - st.lastPlayed) / (21 * DAY));
+  return (st.plays - st.skips * 1.5) * (0.35 + recency);
+}
+
+/** Songs you play most (and don't skip), best first. */
+export function topTracks(stats: Record<string, TrackStat>, n = 10): Track[] {
+  return Object.values(stats)
+    .filter((s) => s.plays > s.skips)
+    .sort((a, b) => tasteScore(b) - tasteScore(a))
+    .slice(0, n)
+    .map((s) => s.track);
+}
+
+/** Artists you play most, each with your favourite song by them. */
+export function topArtists(stats: Record<string, TrackStat>, n = 6): { name: string; score: number; seed: Track }[] {
+  const by = new Map<string, { name: string; score: number; seed: Track; seedScore: number }>();
+  for (const st of Object.values(stats)) {
+    const sc = tasteScore(st);
+    if (sc <= 0) continue;
+    // Lead artist counts fully, a featured artist half; anyone further down the credits not at all.
+    for (const [i, raw] of st.track.artists.slice(0, 2).entries()) {
+      const name = raw.trim();
+      if (!name || /unknown/i.test(name)) continue;
+      const key = name.toLowerCase();
+      const w = i === 0 ? sc : sc * 0.5;
+      const cur = by.get(key);
+      if (!cur) by.set(key, { name, score: w, seed: st.track, seedScore: sc });
+      else {
+        cur.score += w;
+        if (sc > cur.seedScore) {
+          cur.seed = st.track;
+          cur.seedScore = sc;
+        }
+      }
+    }
+  }
+  return [...by.values()].sort((a, b) => b.score - a.score).slice(0, n).map(({ name, score, seed }) => ({ name, score, seed }));
+}
 
 /** Stable album id for a track, matching the ids produced by deriveAlbumsAndArtists. */
 export function albumIdFor(t: Track): string {
@@ -136,6 +197,7 @@ export const useLibraryStore = create<LibraryState>()(
       recentlyPlayed: [],
       customPlaylists: [],
       favourites: [],
+      stats: {},
 
       activeView: "songs",
       viewMode: "list",
@@ -157,9 +219,24 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       recordTrackPlayed: (track) =>
-        set((state) => ({
-          recentlyPlayed: [track, ...state.recentlyPlayed.filter((t) => t.id !== track.id)].slice(0, 30),
-        })),
+        set((state) => {
+          const prev = state.stats[track.id];
+          const stats = {
+            ...state.stats,
+            [track.id]: { track, plays: (prev?.plays ?? 0) + 1, skips: prev?.skips ?? 0, lastPlayed: Date.now() },
+          };
+          return {
+            recentlyPlayed: [track, ...state.recentlyPlayed.filter((t) => t.id !== track.id)].slice(0, 30),
+            stats: pruneStats(stats),
+          };
+        }),
+
+      recordSkip: (track) =>
+        set((state) => {
+          const prev = state.stats[track.id];
+          if (!prev) return {};
+          return { stats: { ...state.stats, [track.id]: { ...prev, skips: prev.skips + 1 } } };
+        }),
 
       clearRecentlyPlayed: () => set({ recentlyPlayed: [] }),
 
@@ -258,6 +335,7 @@ export const useLibraryStore = create<LibraryState>()(
         recentlyPlayed: s.recentlyPlayed,
         customPlaylists: s.customPlaylists,
         favourites: s.favourites,
+        stats: s.stats,
         history: s.history,
         viewMode: s.viewMode,
         sortBy: s.sortBy,
