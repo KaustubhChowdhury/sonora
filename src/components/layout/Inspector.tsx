@@ -1,418 +1,246 @@
-import React, { useEffect, useState, useRef } from "react";
-import {
-  X,
-  ListMusic,
-  FileText,
-  Sliders,
-  Trash2,
-  BookmarkPlus,
-  ShieldCheck,
-  Zap,
-  HardDrive,
-  Cpu,
-  Info,
-} from "lucide-react";
+import React, { useState } from "react";
+import { X, Trash2, GripVertical } from "lucide-react";
 import { useUiStore, InspectorTab } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
-import { useLibraryStore } from "../../stores/libraryStore";
 import { useAudioStudioStore } from "../../stores/audioStudioStore";
-import { LyricsData } from "../../types/music";
-import { TauriBridge } from "../../services/tauriBridge";
-import { AudioFormatBadge } from "../shared/AudioFormatBadge";
+import { Artwork, Button, EqBars, IconButton, Tabs } from "../ui/primitives";
+import { useActiveLyricIndex, useLyrics, useScrollActiveLine } from "../../hooks/useLyrics";
+import { formatTime, sourceLabel, plural } from "../../lib/format";
+import { cn } from "../../lib/cn";
+import { Track } from "../../types/music";
 
 export const Inspector: React.FC = () => {
-  const { inspectorOpen, inspectorTab, setInspectorTab, closeInspector, showToast } = useUiStore();
-  const {
-    currentTrack,
-    queue,
-    queueIndex,
-    currentTimeMs,
-    outputStatus,
-    removeFromQueue,
-    clearQueue,
-    playTrack,
-  } = usePlayerStore();
-  const { addPlaylist } = useLibraryStore();
-  const { outputMode, dspSettings, underrunCount } = useAudioStudioStore();
-
-  const [lyricsData, setLyricsData] = useState<LyricsData | null>(null);
-  const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
-  const activeLyricRef = useRef<HTMLParagraphElement>(null);
-
-  // Fetch lyrics when current track changes
-  useEffect(() => {
-    if (!currentTrack) {
-      setLyricsData(null);
-      return;
-    }
-
-    let isMounted = true;
-    setIsLoadingLyrics(true);
-
-    TauriBridge.fetchLyrics(
-      currentTrack.path,
-      currentTrack.title,
-      currentTrack.artists[0],
-      currentTrack.album,
-      Math.floor(currentTrack.durationMs / 1000)
-    ).then((data) => {
-      if (isMounted) {
-        setLyricsData(data);
-        setIsLoadingLyrics(false);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [currentTrack?.id]);
-
-  // Scroll synced lyrics to active line
-  useEffect(() => {
-    if (activeLyricRef.current) {
-      activeLyricRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  }, [currentTimeMs]);
-
+  const { inspectorOpen, inspectorTab, setInspectorTab, closeInspector } = useUiStore();
   if (!inspectorOpen) return null;
 
-  const handleSaveQueueAsPlaylist = () => {
-    if (queue.length === 0) return;
-    const name = prompt("Name for this playlist:", `Queue ${new Date().toLocaleDateString()}`);
-    if (name && name.trim()) {
-      addPlaylist(name.trim(), `${queue.length} tracks saved from playback queue`);
-      showToast(`Saved ${queue.length} tracks to "${name}"`);
-    }
-  };
+  return (
+    <aside className="w-[340px] shrink-0 flex flex-col min-h-0 ml-2 rounded-t-xl bg-surface border-t border-x border-line overflow-hidden">
+      <div className="flex items-center justify-between px-3 h-12 shrink-0">
+        <Tabs
+          value={inspectorTab}
+          onChange={(v) => setInspectorTab(v as InspectorTab)}
+          items={[
+            { value: "queue", label: "Queue" },
+            { value: "lyrics", label: "Lyrics" },
+            { value: "track-info", label: "Details" },
+          ]}
+        />
+        <IconButton label="Close panel" size="sm" onClick={closeInspector}>
+          <X className="w-4 h-4" />
+        </IconButton>
+      </div>
+      {inspectorTab === "queue" && <QueuePanel />}
+      {inspectorTab === "lyrics" && <LyricsPanel />}
+      {inspectorTab === "track-info" && <DetailsPanel />}
+    </aside>
+  );
+};
 
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return "—";
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
-  };
+/* ---------------- Queue ---------------- */
+
+const QueuePanel: React.FC = () => {
+  const { queue, queueIndex, isPlaying, removeFromQueue, clearQueue, reorderQueue } = usePlayerStore();
+  const { openNewPlaylist } = useUiStore();
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  if (queue.length === 0) {
+    return (
+      <div className="px-5 py-8 text-[13px] text-ink-2">
+        <p className="font-semibold text-ink mb-1">Queue is empty</p>
+        Play something, or right-click a song and choose “Add to queue”.
+      </div>
+    );
+  }
+
+  const current = queue[queueIndex];
+  const upNext = queue.map((t, i) => ({ t, i })).filter(({ i }) => i > queueIndex);
+  const played = queueIndex > 0 ? queueIndex : 0;
+
+  const Row: React.FC<{ t: Track; i: number; isCurrent?: boolean }> = ({ t, i, isCurrent }) => (
+    <div
+      draggable={!isCurrent}
+      onDragStart={() => setDragFrom(i)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(i);
+      }}
+      onDragEnd={() => {
+        setDragFrom(null);
+        setDragOver(null);
+      }}
+      onDrop={() => {
+        if (dragFrom !== null && dragFrom !== i) reorderQueue(dragFrom, i);
+        setDragFrom(null);
+        setDragOver(null);
+      }}
+      onDoubleClick={() => usePlayerStore.getState().playTrack(t)}
+      className={cn(
+        "group flex items-center gap-3 h-14 px-2 rounded-md",
+        isCurrent ? "bg-white/[0.05]" : "hover:bg-white/[0.04]",
+        dragOver === i && dragFrom !== i && "shadow-[inset_0_2px_0_var(--color-signal)]"
+      )}
+    >
+      {!isCurrent && <GripVertical className="w-3.5 h-3.5 text-ink-3 opacity-0 group-hover:opacity-100 cursor-grab -mr-1" />}
+      <Artwork src={t.artworkUrl} className="w-10 h-10" rounded="rounded" />
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-[13px] font-medium truncate", isCurrent ? "text-signal" : "text-ink")}>{t.title}</p>
+        <p className="text-[12px] text-ink-2 truncate">{t.artists.join(", ")}</p>
+      </div>
+      {isCurrent ? (
+        <EqBars playing={isPlaying} />
+      ) : (
+        <IconButton label="Remove from queue" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => removeFromQueue(i)}>
+          <X className="w-3.5 h-3.5" />
+        </IconButton>
+      )}
+    </div>
+  );
 
   return (
-    <aside className="w-[320px] shrink-0 h-full flex flex-col bg-surface/95 backdrop-blur-md border-l border-white/[0.06] select-none text-zinc-300 z-30">
-      {/* Top Inspector Header with Tabs */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/[0.06]">
-        <div className="flex items-center gap-1 bg-white/[0.04] p-0.5 rounded-lg text-xs">
-          <button
-            onClick={() => setInspectorTab("queue")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${
-              inspectorTab === "queue"
-                ? "bg-purple-600/30 text-purple-300 font-semibold"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            <ListMusic className="w-3.5 h-3.5" />
-            <span>Queue</span>
-          </button>
+    <>
+      <div className="flex-1 overflow-y-auto px-2 pb-4">
+        {current && (
+          <>
+            <h3 className="px-2 pt-2 pb-1 text-[12px] font-medium text-ink-3">Now playing</h3>
+            <Row t={current} i={queueIndex} isCurrent />
+          </>
+        )}
+        <h3 className="px-2 pt-5 pb-1 text-[12px] font-medium text-ink-3">
+          {upNext.length ? `Next up · ${upNext.length}` : "Nothing up next"}
+        </h3>
+        {upNext.map(({ t, i }) => (
+          <Row key={`${t.id}-${i}`} t={t} i={i} />
+        ))}
+        {played > 0 && <p className="px-2 pt-4 text-[12px] text-ink-3">{plural(played, "earlier song")} in this queue</p>}
+      </div>
+      <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-3 border-t border-line">
+        <Button size="sm" variant="ghost" onClick={() => openNewPlaylist(queue)}>
+          Save as playlist
+        </Button>
+        <Button size="sm" variant="danger" onClick={clearQueue}>
+          <Trash2 className="w-3.5 h-3.5" /> Clear
+        </Button>
+      </div>
+    </>
+  );
+};
 
-          <button
-            onClick={() => setInspectorTab("lyrics")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${
-              inspectorTab === "lyrics"
-                ? "bg-purple-600/30 text-purple-300 font-semibold"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Lyrics</span>
-          </button>
+/* ---------------- Lyrics ---------------- */
 
+export const LyricsBody: React.FC<{ large?: boolean }> = ({ large }) => {
+  const { data, loading, track } = useLyrics();
+  const idx = useActiveLyricIndex(data);
+  const ref = useScrollActiveLine(idx);
+  const seek = usePlayerStore((s) => s.seek);
+
+  if (!track) return <p className="px-5 py-8 text-[13px] text-ink-2">Play a song to see its lyrics.</p>;
+  if (loading) return <p className="px-5 py-8 text-[13px] text-ink-3">Looking for lyrics…</p>;
+  if (!data || data.source === "none" || (!data.plainText && !data.syncedLines?.length)) {
+    return (
+      <div className="px-5 py-8 text-[13px] text-ink-2">
+        <p className="font-semibold text-ink mb-1">No lyrics found</p>
+        Sonora checks for a matching .lrc file next to the song, then LRCLIB.
+      </div>
+    );
+  }
+
+  if (data.isSynced && data.syncedLines?.length) {
+    return (
+      <div ref={ref} className={cn("relative flex-1 overflow-y-auto", large ? "px-2 py-[30vh]" : "px-5 py-[40%]")}>
+        {data.syncedLines.map((l, i) => (
           <button
-            onClick={() => setInspectorTab("track-info")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors ${
-              inspectorTab === "track-info"
-                ? "bg-purple-600/30 text-purple-300 font-semibold"
-                : "text-zinc-400 hover:text-white"
-            }`}
+            key={i}
+            data-line={i}
+            onClick={() => seek(l.timeMs)}
+            className={cn(
+              "block w-full text-left font-bold tracking-[-0.01em] transition-colors duration-300",
+              large ? "text-[34px] leading-[1.25] py-2" : "text-[19px] leading-[1.35] py-1.5",
+              i === idx ? "text-ink" : i < idx ? "text-ink/35 hover:text-ink/70" : "text-ink/45 hover:text-ink/70"
+            )}
           >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Diagnostics</span>
+            {l.text || "♪"}
           </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("flex-1 overflow-y-auto whitespace-pre-line text-ink-2", large ? "px-2 py-10 text-[22px] leading-relaxed" : "px-5 py-4 text-[14px] leading-relaxed")}>
+      {data.plainText}
+    </div>
+  );
+};
+
+const LyricsPanel: React.FC = () => (
+  <div className="flex-1 min-h-0 flex flex-col">
+    <LyricsBody />
+  </div>
+);
+
+/* ---------------- Details ---------------- */
+
+const DetailsPanel: React.FC = () => {
+  const { currentTrack: t, outputStatus } = usePlayerStore();
+  const { outputMode, dspSettings, boosterSettings } = useAudioStudioStore();
+  if (!t) return <p className="px-5 py-8 text-[13px] text-ink-2">Nothing playing.</p>;
+
+  const native = t.sourceKind === "local" && !!t.path;
+  const rows: [string, React.ReactNode][] = [
+    ["Source", sourceLabel(t.providerId, t.sourceKind)],
+    ["Format", t.codec ?? "—"],
+    ["Sample rate", t.sampleRate ? `${(t.sampleRate / 1000).toFixed(1)} kHz` : "—"],
+    ["Bit depth", t.bitDepth ? `${t.bitDepth}-bit` : "—"],
+    ["Bitrate", t.bitrate ? `${t.bitrate} kbps` : "—"],
+    ["Channels", t.channels ? (t.channels === 2 ? "Stereo" : t.channels === 1 ? "Mono" : `${t.channels}`) : "—"],
+    ["Length", formatTime(t.durationMs)],
+  ];
+  if (t.fileSize) rows.push(["File size", `${(t.fileSize / 1048576).toFixed(1)} MB`]);
+  if (t.year) rows.push(["Year", String(t.year)]);
+  if (t.genre) rows.push(["Genre", t.genre]);
+
+  const outRows: [string, React.ReactNode][] = native
+    ? [
+        ["Engine", "Sonora native (WASAPI)"],
+        ["Mode", outputMode === "exclusive" ? "Exclusive" : "Shared"],
+        ["Device", outputStatus.deviceName],
+        ["Output", `${(outputStatus.negotiatedSampleRate / 1000).toFixed(1)} kHz / ${outputStatus.negotiatedBitDepth}-bit`],
+        ["EQ and effects", dspSettings.bypass || outputStatus.isBitPerfect ? "Bypassed" : "On"],
+        ["Bit-perfect", outputStatus.isBitPerfect ? "Yes" : "No"],
+      ]
+    : [
+        ["Engine", t.providerId === "youtube" ? "YouTube embedded player" : "Web audio stream"],
+        ["Boost", boosterSettings.enabled ? `On, +${boosterSettings.preampBoostDb} dB` : "Off"],
+      ];
+
+  const Table: React.FC<{ title: string; rows: [string, React.ReactNode][] }> = ({ title, rows }) => (
+    <div className="mt-5 first:mt-0">
+      <h3 className="text-[12px] font-medium text-ink-3 mb-1.5">{title}</h3>
+      <dl className="text-[13px]">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-4 py-1.5 border-b border-line last:border-0">
+            <dt className="text-ink-2">{k}</dt>
+            <dd className="text-ink text-right truncate tnum">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 pb-6">
+      <div className="flex items-center gap-3 py-2 mb-3">
+        <Artwork src={t.artworkUrl} className="w-14 h-14" />
+        <div className="min-w-0">
+          <p className="text-[14px] font-semibold truncate">{t.title}</p>
+          <p className="text-[12px] text-ink-2 truncate">{t.artists.join(", ")}</p>
         </div>
-
-        <button
-          onClick={closeInspector}
-          className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.04] transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
-
-      {/* Inspector Body */}
-      <div className="flex-1 overflow-y-auto p-3.5">
-        {/* TAB 1: QUEUE */}
-        {inspectorTab === "queue" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Now Playing & Queue
-                </h3>
-                <p className="text-[11px] text-zinc-500 font-mono">
-                  {queue.length} {queue.length === 1 ? "track" : "tracks"}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={handleSaveQueueAsPlaylist}
-                  title="Save current queue as playlist"
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-purple-300 hover:bg-white/[0.04] transition-colors"
-                >
-                  <BookmarkPlus className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={clearQueue}
-                  title="Clear Queue"
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-white/[0.04] transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {queue.length === 0 ? (
-              <div className="py-12 text-center text-xs text-zinc-500">
-                Queue is empty. Play or add songs from your library.
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {queue.map((track, idx) => {
-                  const isCurrent = idx === queueIndex;
-                  return (
-                    <div
-                      key={`${track.id}-${idx}`}
-                      onClick={() => playTrack(track)}
-                      className={`group flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer transition-colors border ${
-                        isCurrent
-                          ? "bg-purple-950/40 border-purple-500/30 text-white"
-                          : "hover:bg-white/[0.04] border-transparent text-zinc-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                        {track.artworkUrl ? (
-                          <img
-                            src={track.artworkUrl}
-                            alt=""
-                            className="w-8 h-8 rounded-lg object-cover shrink-0 bg-zinc-800"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-lg bg-zinc-800 shrink-0 flex items-center justify-center font-mono text-zinc-600">
-                            ♪
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p
-                            className={`truncate font-medium ${
-                              isCurrent ? "text-purple-300 font-semibold" : "text-zinc-100"
-                            }`}
-                          >
-                            {track.title}
-                          </p>
-                          <p className="text-[11px] text-zinc-400 truncate">
-                            {track.artists.join(", ")}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        {isCurrent ? (
-                          <span className="text-[10px] font-mono text-purple-400 uppercase font-semibold px-1.5 py-0.5 rounded bg-purple-500/20">
-                            Active
-                          </span>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeFromQueue(idx);
-                              showToast(`Removed "${track.title}" from queue`);
-                            }}
-                            className="p-1 rounded text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 2: LYRICS */}
-        {inspectorTab === "lyrics" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Lyrics
-              </span>
-              {lyricsData && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                  {lyricsData.source === "lrclib"
-                    ? "LRCLIB API"
-                    : lyricsData.source === "sidecar"
-                    ? "Local .lrc"
-                    : lyricsData.source === "embedded"
-                    ? "Embedded Tag"
-                    : "No Lyrics"}
-                </span>
-              )}
-            </div>
-
-            {isLoadingLyrics ? (
-              <div className="py-12 text-center text-xs text-zinc-500 animate-pulse">
-                Fetching synchronized lyrics...
-              </div>
-            ) : lyricsData?.syncedLines && lyricsData.syncedLines.length > 0 ? (
-              <div className="space-y-3 text-sm py-4">
-                {lyricsData.syncedLines.map((line, idx) => {
-                  const nextLine = lyricsData.syncedLines![idx + 1];
-                  const isActive =
-                    currentTimeMs >= line.timeMs &&
-                    (!nextLine || currentTimeMs < nextLine.timeMs);
-
-                  return (
-                    <p
-                      key={idx}
-                      ref={isActive ? activeLyricRef : null}
-                      onClick={() => {
-                        usePlayerStore.getState().seek(line.timeMs);
-                        TauriBridge.seek(line.timeMs);
-                      }}
-                      className={`cursor-pointer transition-all duration-200 ${
-                        isActive
-                          ? "text-purple-300 font-bold scale-[1.02] origin-left"
-                          : "text-zinc-500 hover:text-zinc-300"
-                      }`}
-                    >
-                      {line.text}
-                    </p>
-                  );
-                })}
-              </div>
-            ) : lyricsData?.plainText ? (
-              <div className="whitespace-pre-line text-sm text-zinc-300 leading-relaxed font-sans">
-                {lyricsData.plainText}
-              </div>
-            ) : (
-              <div className="py-12 text-center text-xs text-zinc-500">
-                No lyrics available for this track.
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: DIAGNOSTICS & TRACK INFO */}
-        {inspectorTab === "track-info" && currentTrack && (
-          <div className="space-y-5 text-xs">
-            {/* Source Specs */}
-            <div>
-              <div className="flex items-center gap-1.5 text-zinc-400 uppercase font-semibold text-[10px] tracking-wider mb-2">
-                <HardDrive className="w-3 h-3 text-purple-400" />
-                <span>Source Audio File</span>
-              </div>
-              <div className="bg-surface-muted p-3 rounded-xl border border-white/[0.05] space-y-2 font-mono">
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Codec:</span>
-                  <span className="text-zinc-200 font-semibold">{currentTrack.codec || "PCM"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Sample Rate:</span>
-                  <span className="text-zinc-200">{currentTrack.sampleRate || 44100} Hz</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Bit Depth:</span>
-                  <span className="text-zinc-200">{currentTrack.bitDepth || 16}-bit</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Channels:</span>
-                  <span className="text-zinc-200">{currentTrack.channels || 2} ch (Stereo)</span>
-                </div>
-                {currentTrack.bitrate && (
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Bitrate:</span>
-                    <span className="text-zinc-200">{currentTrack.bitrate} kbps</span>
-                  </div>
-                )}
-                {currentTrack.fileSize && (
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">File Size:</span>
-                    <span className="text-zinc-200">{formatFileSize(currentTrack.fileSize)}</span>
-                  </div>
-                )}
-                <div className="pt-2 border-t border-white/[0.05]">
-                  <span className="text-zinc-500 text-[10px] block">Path:</span>
-                  <span className="text-zinc-400 text-[10px] break-all">
-                    {currentTrack.path || "Stream / Network"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Output Engine Specs */}
-            <div>
-              <div className="flex items-center gap-1.5 text-zinc-400 uppercase font-semibold text-[10px] tracking-wider mb-2">
-                <Cpu className="w-3 h-3 text-purple-400" />
-                <span>Windows Audio Engine (WASAPI)</span>
-              </div>
-              <div className="bg-surface-muted p-3 rounded-xl border border-white/[0.05] space-y-2 font-mono">
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">Output Mode:</span>
-                  {outputMode === "exclusive" || outputStatus.isBitPerfect ? (
-                    <span className="px-1.5 py-0.5 rounded bg-purple-950/60 text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3" />
-                      BIT-PERFECT DIRECT
-                    </span>
-                  ) : (
-                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-zinc-400" />
-                      WASAPI SHARED
-                    </span>
-                  )}
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Device:</span>
-                  <span className="text-zinc-200 text-right truncate max-w-[170px]" title={outputStatus.deviceName}>
-                    {outputStatus.deviceName}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Endpoint Format:</span>
-                  <span className="text-zinc-200">
-                    {outputStatus.negotiatedSampleRate}Hz / {outputStatus.negotiatedBitDepth}b
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">DSP Pipeline:</span>
-                  <span className={dspSettings.bypass || outputStatus.isBitPerfect ? "text-purple-300 font-semibold" : "text-zinc-300"}>
-                    {dspSettings.bypass || outputStatus.isBitPerfect ? "Bypassed (Strict Pass-through)" : "Active (10-Band EQ)"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Buffer Underruns:</span>
-                  <span className="text-emerald-400 font-semibold">{underrunCount} (Zero-glitch)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Audiophile Caveat Disclosure */}
-            <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300 text-[11px] leading-relaxed flex items-start gap-2">
-              <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-              <span>
-                Sonora delivers decoded audio samples directly to your Windows audio endpoint without alterations in Bit-Perfect mode. Note that hardware DAC firmware may still perform internal analog reconstruction.
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-    </aside>
+      <Table title="File" rows={rows} />
+      <Table title="Playback" rows={outRows} />
+      {t.path && <p className="mt-4 text-[11px] text-ink-3 break-all select-text">{t.path}</p>}
+      {t.attribution && <p className="mt-4 text-[12px] text-ink-3">{t.attribution}</p>}
+    </div>
   );
 };
