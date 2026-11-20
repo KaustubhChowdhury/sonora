@@ -179,6 +179,13 @@ pub fn remove_library_folder(state: State<Arc<AppState>>, folder_path: String) -
     let conn = state.db.conn.lock().unwrap();
     conn.execute("DELETE FROM folders WHERE path = ?1", params![folder_path])
         .map_err(|e| e.to_string())?;
+    // Drop the folder's tracks too, otherwise they reappear on the next launch.
+    let prefix = format!("{}%", folder_path.trim_end_matches(&['\\', '/'][..]));
+    conn.execute(
+        "DELETE FROM tracks WHERE source_kind = 'local' AND path LIKE ?1",
+        params![prefix],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

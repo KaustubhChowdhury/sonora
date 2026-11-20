@@ -1,402 +1,319 @@
-import React, { useState } from "react";
-import {
-  Search,
-  Filter,
-  Grid,
-  List,
-  ArrowUpDown,
-  FolderPlus,
-  RefreshCw,
-  HardDrive,
-  Trash2,
-} from "lucide-react";
-import { useLibraryStore } from "../../stores/libraryStore";
+import React, { useMemo, useState } from "react";
+import { FolderOpen, FolderPlus, Heart, RefreshCw, Search, Trash2 } from "lucide-react";
+import { useLibraryStore, SortKey, albumIdFor } from "../../stores/libraryStore";
 import { useUiStore } from "../../stores/uiStore";
-import { TrackRow } from "../../components/shared/TrackRow";
-import { AlbumCard } from "../../components/shared/AlbumCard";
-import { ArtistCard } from "../../components/shared/ArtistCard";
-import { TauriBridge } from "../../services/tauriBridge";
+import { usePlayerStore } from "../../stores/playerStore";
+import { TrackList } from "../../components/shared/TrackRow";
+import { CollectionHeader } from "../../components/shared/CollectionHeader";
+import { MediaTile, TileGrid } from "../../components/shared/MediaTile";
+import { Button, EmptyState, IconButton, PageHeader } from "../../components/ui/primitives";
+import { addFolderWithPicker, removeFolder, scanFolder } from "../../services/libraryActions";
+import { formatLongDuration, plural } from "../../lib/format";
+import { Track } from "../../types/music";
 
 export const LibraryScreen: React.FC = () => {
-  const {
-    tracks,
-    albums,
-    artists,
-    folders,
-    history,
-    scanStatus,
-    activeView,
-    setActiveView,
-    viewMode,
-    setViewMode,
-    sourceFilter,
-    setSourceFilter,
-    qualityFilter,
-    setQualityFilter,
-    sortBy,
-    sortOrder,
-    setSort,
-    setScanStatus,
-    addTracks,
-    removeFolder,
-  } = useLibraryStore();
+  const view = useLibraryStore((s) => s.activeView);
+  switch (view) {
+    case "albums":
+      return <AlbumsView />;
+    case "artists":
+      return <ArtistsView />;
+    case "favourites":
+      return <LikedView />;
+    case "history":
+      return <HistoryView />;
+    case "folders":
+      return <FoldersView />;
+    default:
+      return <SongsView />;
+  }
+};
 
-  const { showToast } = useUiStore();
-  const [filterQuery, setFilterQuery] = useState("");
-
-  // Filter tracks
-  let filteredTracks = tracks.filter((t) => {
-    // Text search
-    if (filterQuery.trim()) {
-      const q = filterQuery.toLowerCase();
-      const matchTitle = t.title.toLowerCase().includes(q);
-      const matchArtist = t.artists.some((a) => a.toLowerCase().includes(q));
-      const matchAlbum = t.album?.toLowerCase().includes(q);
-      if (!matchTitle && !matchArtist && !matchAlbum) return false;
+const NoLibrary: React.FC = () => (
+  <EmptyState
+    icon={<FolderOpen className="w-6 h-6" />}
+    title="Your library is empty"
+    body="Add a folder of music files. Sonora reads FLAC, WAV, ALAC, MP3, AAC, Ogg and Opus, and keeps everything on this computer."
+    action={
+      <Button variant="primary" onClick={addFolderWithPicker}>
+        <FolderPlus className="w-4 h-4" /> Add a music folder
+      </Button>
     }
+  />
+);
 
-    // Source filter
-    if (sourceFilter !== "all" && t.sourceKind !== sourceFilter) {
-      return false;
+const SORTS: { value: SortKey; label: string }[] = [
+  { value: "title", label: "Title" },
+  { value: "artist", label: "Artist" },
+  { value: "album", label: "Album" },
+  { value: "year", label: "Year" },
+  { value: "duration", label: "Length" },
+];
+
+function sortTracks(list: Track[], by: SortKey, order: "asc" | "desc") {
+  const cmp = (a: Track, b: Track) => {
+    switch (by) {
+      case "artist":
+        return (a.artists[0] || "").localeCompare(b.artists[0] || "") || (a.album || "").localeCompare(b.album || "") || (a.trackNumber || 0) - (b.trackNumber || 0);
+      case "album":
+        return (a.album || "").localeCompare(b.album || "") || (a.discNumber || 0) - (b.discNumber || 0) || (a.trackNumber || 0) - (b.trackNumber || 0);
+      case "year":
+        return (a.year || 0) - (b.year || 0);
+      case "duration":
+        return a.durationMs - b.durationMs;
+      default:
+        return a.title.localeCompare(b.title);
     }
-
-    // Quality filter
-    if (qualityFilter === "lossless") {
-      const isLossless = ["FLAC", "WAV", "ALAC"].includes(t.codec?.toUpperCase() || "");
-      if (!isLossless) return false;
-    } else if (qualityFilter === "hires") {
-      const isHiRes = (t.sampleRate || 0) > 48000 || (t.bitDepth || 0) > 16;
-      if (!isHiRes) return false;
-    }
-
-    // Favourites view
-    if (activeView === "favourites" && !t.isFavourite) {
-      return false;
-    }
-
-    return true;
-  });
-
-  // Sort tracks
-  filteredTracks.sort((a, b) => {
-    let cmp = 0;
-    if (sortBy === "title") cmp = a.title.localeCompare(b.title);
-    else if (sortBy === "artist") cmp = (a.artists[0] || "").localeCompare(b.artists[0] || "");
-    else if (sortBy === "album") cmp = (a.album || "").localeCompare(b.album || "");
-    else if (sortBy === "duration") cmp = a.durationMs - b.durationMs;
-    else if (sortBy === "year") cmp = (a.year || 0) - (b.year || 0);
-
-    return sortOrder === "asc" ? cmp : -cmp;
-  });
-
-  const handleManualScan = async (folderPath: string) => {
-    setScanStatus({ isScanning: true, currentFolder: folderPath });
-    showToast(`Scanning "${folderPath}"...`);
-    const res = await TauriBridge.scanFolder(folderPath);
-    setScanStatus({
-      isScanning: false,
-      scannedFiles: res.scannedFiles,
-      totalCandidates: res.totalCandidates,
-      errorCount: res.errorCount,
-      errors: res.errors,
-    });
-    // Reload tracks from database
-    const refreshed = await TauriBridge.getLibraryTracks();
-    addTracks(refreshed);
-    showToast(`Scan complete: ${res.scannedFiles} tracks indexed`);
   };
+  const sorted = [...list].sort(cmp);
+  return order === "asc" ? sorted : sorted.reverse();
+}
+
+const FilterBar: React.FC<{ value: string; onChange: (v: string) => void; placeholder: string; children?: React.ReactNode }> = ({
+  value,
+  onChange,
+  placeholder,
+  children,
+}) => (
+  <div className="flex items-center gap-3 px-8 pb-4">
+    <label className="relative w-60">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-3 pointer-events-none" />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="w-full h-8 pl-9 pr-3 rounded-full bg-white/[0.06] text-[13px] placeholder:text-ink-3 focus:outline-none focus:bg-white/[0.09]"
+      />
+    </label>
+    {children}
+  </div>
+);
+
+const SongsView: React.FC = () => {
+  const { tracks, sortBy, sortOrder, setSort } = useLibraryStore();
+  const [filter, setFilter] = useState("");
+  const list = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    const base = q
+      ? tracks.filter((t) => t.title.toLowerCase().includes(q) || t.artists.some((a) => a.toLowerCase().includes(q)) || t.album?.toLowerCase().includes(q))
+      : tracks;
+    return sortTracks(base, sortBy, sortOrder);
+  }, [tracks, filter, sortBy, sortOrder]);
+  const total = tracks.reduce((s, t) => s + t.durationMs, 0);
+
+  if (!tracks.length)
+    return (
+      <div className="flex-1 overflow-y-auto px-8">
+        <PageHeader title="Songs" />
+        <NoLibrary />
+      </div>
+    );
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden select-none">
-      {/* Subheader: Views, Filters & Search */}
-      <div className="px-8 pt-6 pb-4 border-b border-white/[0.06] space-y-4">
-        {/* Navigation Tabs */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 bg-surface-muted/60 p-1 rounded-xl border border-white/[0.04]">
-            {(
-              [
-                { id: "songs", label: "Tracks" },
-                { id: "albums", label: "Albums" },
-                { id: "artists", label: "Artists" },
-                { id: "folders", label: "Folders" },
-                { id: "favourites", label: "Favourites" },
-                { id: "history", label: "History" },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveView(tab.id)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  activeView === tab.id
-                    ? "bg-purple-600/30 text-purple-300 font-semibold shadow-sm"
-                    : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                {tab.label}
-              </button>
+    <div className="flex-1 overflow-y-auto pb-16">
+      <CollectionHeader
+        kind="Your library"
+        title="Songs"
+        meta={`${plural(tracks.length, "song")}, ${formatLongDuration(total)}`}
+        artworkUrl={tracks.find((t) => t.artworkUrl)?.artworkUrl}
+        tracks={list}
+      />
+      <FilterBar value={filter} onChange={setFilter} placeholder="Filter songs">
+        <label className="flex items-center gap-2 text-[12px] text-ink-3 ml-auto">
+          Sort by
+          <select
+            value={sortBy}
+            onChange={(e) => setSort(e.target.value as SortKey, "asc")}
+            className="h-8 px-2 rounded-md bg-white/[0.06] text-[13px] text-ink focus:outline-none"
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value} className="bg-surface-elevated">
+                {s.label}
+              </option>
             ))}
-          </div>
-
-          {/* View mode toggle */}
-          {activeView === "albums" && (
-            <div className="flex items-center gap-1 bg-surface-muted p-1 rounded-lg border border-white/[0.04]">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded ${
-                  viewMode === "grid" ? "bg-white/10 text-white" : "text-zinc-500"
-                }`}
-              >
-                <Grid className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-1.5 rounded ${
-                  viewMode === "list" ? "bg-white/10 text-white" : "text-zinc-500"
-                }`}
-              >
-                <List className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Filter Bar */}
-        <div className="flex items-center justify-between gap-4">
-          {/* Quick search inside current view */}
-          <div className="relative w-72">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Filter in library..."
-              value={filterQuery}
-              onChange={(e) => setFilterQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-surface-muted border border-white/[0.06] text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-purple-500/50"
-            />
-          </div>
-
-          {/* Source & Quality filter tags */}
-          <div className="flex items-center gap-2 text-xs">
-            {/* Source */}
-            <select
-              value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value as any)}
-              className="bg-surface-muted border border-white/[0.06] rounded-xl px-2.5 py-1.5 text-zinc-300 text-xs focus:outline-none"
-            >
-              <option value="all">All Sources</option>
-              <option value="local">Local Files</option>
-              <option value="jamendo">Jamendo CC</option>
-              <option value="navidrome">Personal Server</option>
-            </select>
-
-            {/* Quality */}
-            <select
-              value={qualityFilter}
-              onChange={(e) => setQualityFilter(e.target.value as any)}
-              className="bg-surface-muted border border-white/[0.06] rounded-xl px-2.5 py-1.5 text-zinc-300 text-xs focus:outline-none"
-            >
-              <option value="all">All Formats</option>
-              <option value="lossless">Lossless Only (FLAC/WAV/ALAC)</option>
-              <option value="hires">Hi-Res Only (24-bit / &gt;48kHz)</option>
-            </select>
-
-            {/* Sort */}
-            <button
-              onClick={() => setSort(sortBy)}
-              title={`Sorted by ${sortBy} (${sortOrder})`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-muted border border-white/[0.06] text-zinc-300 hover:text-white"
-            >
-              <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="capitalize">{sortBy}</span>
-            </button>
-          </div>
-        </div>
+          </select>
+          <Button size="sm" variant="ghost" onClick={() => setSort(sortBy, sortOrder === "asc" ? "desc" : "asc")}>
+            {sortOrder === "asc" ? "A → Z" : "Z → A"}
+          </Button>
+        </label>
+      </FilterBar>
+      <div className="px-6">
+        {list.length ? <TrackList tracks={list} /> : <p className="px-2 py-6 text-[13px] text-ink-2">No songs match “{filter}”.</p>}
       </div>
+    </div>
+  );
+};
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-8 pb-48">
-        {/* SONGS / TRACKS VIEW */}
-        {(activeView === "songs" || activeView === "favourites") && (
-          <div className="space-y-1">
-            {/* Table Header */}
-            <div className="grid grid-cols-[36px_1fr_1fr_120px_140px_70px] items-center px-3 pb-2 text-[11px] font-mono uppercase font-semibold text-zinc-500 border-b border-white/[0.05]">
-              <span className="text-center">#</span>
-              <span
-                onClick={() => setSort("title")}
-                className="cursor-pointer hover:text-zinc-300"
-              >
-                Title
-              </span>
-              <span
-                onClick={() => setSort("album")}
-                className="cursor-pointer hover:text-zinc-300"
-              >
-                Album
-              </span>
-              <span>Source</span>
-              <span>Format Spec</span>
-              <span className="text-right">Duration</span>
-            </div>
+const AlbumsView: React.FC = () => {
+  const { albums, tracks } = useLibraryStore();
+  const { navigate } = useUiStore();
+  const [filter, setFilter] = useState("");
+  const list = albums
+    .filter((a) => !filter || `${a.title} ${a.artist}`.toLowerCase().includes(filter.toLowerCase()))
+    .sort((a, b) => a.artist.localeCompare(b.artist) || (a.year || 0) - (b.year || 0));
+  return (
+    <div className="flex-1 overflow-y-auto pb-16">
+      <PageHeader className="px-8" title="Albums" subtitle={albums.length ? plural(albums.length, "album") : undefined} />
+      {!albums.length ? (
+        <div className="px-8">
+          <NoLibrary />
+        </div>
+      ) : (
+        <>
+          <FilterBar value={filter} onChange={setFilter} placeholder="Filter albums" />
+          <div className="px-8">
+            <TileGrid>
+              {list.map((a) => {
+                const albumTracks = tracks.filter((t) => (t.albumId || `album-${t.artists[0] || "Unknown artist"}\u0000${t.album || "Unknown album"}`) === a.id);
+                return (
+                  <MediaTile
+                    key={a.id}
+                    title={a.title}
+                    subtitle={[a.artist, a.year].filter(Boolean).join(" · ")}
+                    artworkUrl={a.artworkUrl}
+                    onOpen={() => navigate("album-detail", { albumId: a.id })}
+                    onPlay={albumTracks.length ? () => usePlayerStore.getState().playTrack(albumTracks[0], albumTracks) : undefined}
+                  />
+                );
+              })}
+            </TileGrid>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
-            {filteredTracks.length === 0 ? (
-              <div className="py-20 text-center text-xs text-zinc-500">
-                No tracks match the selected filters.
-              </div>
-            ) : (
-              filteredTracks.map((track, idx) => (
-                <TrackRow
-                  key={track.id}
-                  track={track}
-                  index={idx}
-                  playlistContext={filteredTracks}
+const ArtistsView: React.FC = () => {
+  const { artists } = useLibraryStore();
+  const { navigate } = useUiStore();
+  const [filter, setFilter] = useState("");
+  const list = artists.filter((a) => !filter || a.name.toLowerCase().includes(filter.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <div className="flex-1 overflow-y-auto pb-16">
+      <PageHeader className="px-8" title="Artists" subtitle={artists.length ? plural(artists.length, "artist") : undefined} />
+      {!artists.length ? (
+        <div className="px-8">
+          <NoLibrary />
+        </div>
+      ) : (
+        <>
+          <FilterBar value={filter} onChange={setFilter} placeholder="Filter artists" />
+          <div className="px-8">
+            <TileGrid>
+              {list.map((a) => (
+                <MediaTile
+                  key={a.id}
+                  round
+                  title={a.name}
+                  subtitle={plural(a.trackCount, "song")}
+                  artworkUrl={a.artworkUrl}
+                  onOpen={() => navigate("artist-detail", { artistId: a.id })}
                 />
-              ))
-            )}
-          </div>
-        )}
-
-        {/* ALBUMS VIEW */}
-        {activeView === "albums" && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {albums.map((album) => (
-              <AlbumCard key={album.id} album={album} />
-            ))}
-          </div>
-        )}
-
-        {/* ARTISTS VIEW */}
-        {activeView === "artists" && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {artists.map((artist) => (
-              <ArtistCard key={artist.id} artist={artist} />
-            ))}
-          </div>
-        )}
-
-        {/* FOLDERS VIEW */}
-        {activeView === "folders" && (
-          <div className="space-y-6 max-w-4xl">
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
-              <div>
-                <h3 className="text-sm font-bold text-white">Monitored Music Folders</h3>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  Sonora reads audio tags and embedded artwork locally. Files never leave your device.
-                </p>
-              </div>
-
-              <button
-                onClick={async () => {
-                  const path = prompt("Enter full folder path to scan (e.g. C:\\Music):");
-                  if (path && path.trim()) {
-                    useLibraryStore.getState().addFolder(path.trim());
-                    handleManualScan(path.trim());
-                  }
-                }}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md transition-colors"
-              >
-                <FolderPlus className="w-4 h-4" />
-                <span>Add Folder</span>
-              </button>
-            </div>
-
-            {/* Scan Status banner if active */}
-            {scanStatus.isScanning && (
-              <div className="p-4 rounded-2xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-between animate-pulse">
-                <div className="flex items-center gap-3">
-                  <RefreshCw className="w-5 h-5 text-purple-400 animate-spin" />
-                  <div>
-                    <p className="text-xs font-semibold text-white">Scanning Library...</p>
-                    <p className="text-[11px] text-zinc-400">
-                      Processing: {scanStatus.currentFolder}
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xs font-mono text-purple-300">
-                  {scanStatus.scannedFiles} files indexed
-                </span>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {folders.map((folder) => (
-                <div
-                  key={folder}
-                  className="flex items-center justify-between p-4 rounded-2xl bg-surface-muted/50 border border-white/[0.06]"
-                >
-                  <div className="flex items-center gap-3 min-w-0 pr-4">
-                    <HardDrive className="w-5 h-5 text-purple-400 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-mono text-xs text-zinc-200 truncate">{folder}</p>
-                      <p className="text-[11px] text-zinc-500">Recursive scan enabled</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleManualScan(folder)}
-                      title="Rescan this folder now"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 text-xs text-zinc-300 transition-colors"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Rescan</span>
-                    </button>
-                    <button
-                      onClick={() => removeFolder(folder)}
-                      title="Remove folder"
-                      className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
               ))}
-            </div>
+            </TileGrid>
           </div>
-        )}
+        </>
+      )}
+    </div>
+  );
+};
 
-        {/* HISTORY VIEW */}
-        {activeView === "history" && (
-          <div className="space-y-2">
-            <h3 className="text-xs uppercase font-semibold text-zinc-500 font-mono mb-3">
-              Playback Activity Log
-            </h3>
-            {history.length === 0 ? (
-              <div className="py-20 text-center text-xs text-zinc-500">
-                No listening history recorded yet.
-              </div>
-            ) : (
-              history.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-surface-muted/30 border border-white/[0.04] text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    {entry.artworkUrl ? (
-                      <img
-                        src={entry.artworkUrl}
-                        alt=""
-                        className="w-8 h-8 rounded-lg object-cover bg-zinc-800"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center font-mono text-zinc-600">
-                        ♪
-                      </div>
-                    )}
-                    <div>
-                      <p className="font-semibold text-zinc-100">{entry.title}</p>
-                      <p className="text-zinc-400 text-[11px]">{entry.artist}</p>
-                    </div>
-                  </div>
-
-                  <div className="text-right font-mono text-[11px] text-zinc-500">
-                    <p>{new Date(entry.playedAt).toLocaleTimeString()}</p>
-                    <p>{Math.round(entry.completionRatio * 100)}% listened</p>
-                  </div>
-                </div>
-              ))
-            )}
+const LikedView: React.FC = () => {
+  const { favourites } = useLibraryStore();
+  const total = favourites.reduce((s, t) => s + t.durationMs, 0);
+  return (
+    <div className="flex-1 overflow-y-auto pb-16">
+      <CollectionHeader
+        kind="Playlist"
+        title="Liked songs"
+        artwork={
+          <div className="w-[184px] h-[184px] rounded-lg bg-signal flex items-center justify-center shadow-xl shadow-black/40">
+            <Heart className="w-16 h-16 text-signal-ink fill-current" />
           </div>
+        }
+        meta={favourites.length ? `${plural(favourites.length, "song")}, ${formatLongDuration(total)}` : undefined}
+        tracks={favourites}
+      />
+      <div className="px-6">
+        {favourites.length ? (
+          <TrackList tracks={favourites} />
+        ) : (
+          <EmptyState className="px-2" title="Songs you like will appear here" body="Click the heart next to any song, from search, your library or the player bar." />
         )}
       </div>
+    </div>
+  );
+};
+
+const HistoryView: React.FC = () => {
+  const { recentlyPlayed, clearRecentlyPlayed } = useLibraryStore();
+  return (
+    <div className="flex-1 overflow-y-auto pb-16">
+      <PageHeader
+        className="px-8"
+        title="Recently played"
+        actions={recentlyPlayed.length ? <Button variant="ghost" size="sm" onClick={clearRecentlyPlayed}>Clear history</Button> : null}
+      />
+      <div className="px-6">
+        {recentlyPlayed.length ? (
+          <TrackList tracks={recentlyPlayed} />
+        ) : (
+          <EmptyState className="px-2" title="Nothing played yet" body="The last 30 songs you play show up here." />
+        )}
+      </div>
+    </div>
+  );
+};
+
+const FoldersView: React.FC = () => {
+  const { folders, scanStatus, tracks } = useLibraryStore();
+  return (
+    <div className="flex-1 overflow-y-auto px-8 pb-16">
+      <PageHeader
+        title="Folders"
+        subtitle="Sonora reads the tags and artwork from these folders. Your files stay where they are."
+        actions={
+          <Button variant="primary" onClick={addFolderWithPicker} disabled={scanStatus.isScanning}>
+            <FolderPlus className="w-4 h-4" /> Add folder
+          </Button>
+        }
+      />
+      {scanStatus.isScanning && (
+        <p className="mb-4 text-[13px] text-ink-2">
+          Scanning {scanStatus.currentFolder}… <span className="text-ink-3">this can take a minute for large folders.</span>
+        </p>
+      )}
+      {!scanStatus.isScanning && scanStatus.errors.length > 0 && (
+        <p className="mb-4 text-[13px] text-danger">
+          {plural(scanStatus.errors.length, "file")} couldn't be read. {scanStatus.errors[0]}
+        </p>
+      )}
+      {folders.length === 0 ? (
+        <NoLibrary />
+      ) : (
+        <ul className="max-w-3xl border-t border-line">
+          {folders.map((f) => {
+            const count = tracks.filter((t) => t.path?.toLowerCase().startsWith(f.toLowerCase())).length;
+            return (
+              <li key={f} className="group flex items-center gap-4 h-14 border-b border-line">
+                <FolderOpen className="w-5 h-5 text-ink-3 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] text-ink truncate select-text">{f}</p>
+                  <p className="text-[12px] text-ink-3">{plural(count, "song")}</p>
+                </div>
+                <IconButton label="Scan again" onClick={() => scanFolder(f)} disabled={scanStatus.isScanning}>
+                  <RefreshCw className="w-4 h-4" />
+                </IconButton>
+                <IconButton label="Remove folder" onClick={() => removeFolder(f)} className="hover:text-danger">
+                  <Trash2 className="w-4 h-4" />
+                </IconButton>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 };

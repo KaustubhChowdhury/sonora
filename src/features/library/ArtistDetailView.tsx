@@ -1,120 +1,107 @@
-import React from "react";
-import { ArrowLeft, Play, Disc3 } from "lucide-react";
+import React, { useEffect, useState } from "react";
 import { useUiStore } from "../../stores/uiStore";
-import { useLibraryStore } from "../../stores/libraryStore";
+import { useLibraryStore, albumIdFor } from "../../stores/libraryStore";
 import { usePlayerStore } from "../../stores/playerStore";
-import { AlbumCard } from "../../components/shared/AlbumCard";
-import { TrackRow } from "../../components/shared/TrackRow";
+import { CollectionHeader } from "../../components/shared/CollectionHeader";
+import { TrackList } from "../../components/shared/TrackRow";
+import { MediaTile, TileGrid } from "../../components/shared/MediaTile";
+import { Section } from "../../components/ui/primitives";
+import { TauriBridge } from "../../services/tauriBridge";
+import { Track } from "../../types/music";
+import { plural } from "../../lib/format";
 
+const streamCache = new Map<string, Track[]>();
+
+/**
+ * Artist page. Songs from your library come first; songs from JioSaavn and YouTube
+ * are fetched by name underneath, so artists you only stream still get a page.
+ */
 export const ArtistDetailView: React.FC = () => {
   const { selectedArtistId, navigate } = useUiStore();
   const { artists, albums, tracks } = useLibraryStore();
-  const { playTrack } = usePlayerStore();
-
+  const name = selectedArtistId?.replace(/^artist-/, "") ?? "";
   const artist = artists.find((a) => a.id === selectedArtistId);
+  const [streamed, setStreamed] = useState<Track[]>(streamCache.get(name) ?? []);
+  const [loading, setLoading] = useState(!streamCache.has(name));
 
-  if (!artist) {
-    return (
-      <div className="flex-1 p-8 text-center text-xs text-zinc-500">
-        Artist not found.
-        <button
-          onClick={() => navigate("library")}
-          className="block mx-auto mt-2 text-purple-400 hover:underline"
-        >
-          Return to Library
-        </button>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!name || streamCache.has(name)) return;
+    let alive = true;
+    Promise.allSettled([TauriBridge.searchJioSaavn(name, 20), TauriBridge.searchYouTube(name, 12)]).then(([s, y]) => {
+      const lower = name.toLowerCase();
+      const all = [...(s.status === "fulfilled" ? s.value : []), ...(y.status === "fulfilled" ? y.value : [])];
+      // Keep results that actually credit this artist
+      const matching = all.filter((t) => t.artists.some((a) => a.toLowerCase().includes(lower)));
+      streamCache.set(name, matching);
+      if (alive) {
+        setStreamed(matching);
+        setLoading(false);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [name]);
 
-  const artistTracks = tracks.filter((t) => t.artists.includes(artist.name));
-  const artistAlbums = albums.filter((al) => al.artist === artist.name);
+  const own = tracks.filter((t) => t.artists.includes(name));
+  const ownAlbums = albums.filter((a) => a.artist === name);
+  const everything = [...own, ...streamed];
+  const art = artist?.artworkUrl || streamed[0]?.artworkUrl;
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto p-8 space-y-8 select-none pb-48">
-      {/* Back button */}
-      <button
-        onClick={() => navigate("library")}
-        className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition-colors w-fit"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Back to Artists</span>
-      </button>
+    <div className="flex-1 overflow-y-auto pb-16">
+      <CollectionHeader
+        kind="Artist"
+        title={name || "Unknown artist"}
+        artworkUrl={art}
+        roundArt
+        meta={
+          own.length
+            ? `${plural(own.length, "song")} in your library${ownAlbums.length ? `, ${plural(ownAlbums.length, "album")}` : ""}`
+            : loading
+            ? "Looking for songs…"
+            : streamed.length
+            ? `${plural(streamed.length, "song")} on JioSaavn and YouTube`
+            : "No songs found"
+        }
+        tracks={everything}
+      />
 
-      {/* Artist Header Banner */}
-      <div className="flex items-center gap-6 pb-6 border-b border-white/[0.06]">
-        <div className="w-36 h-36 rounded-full overflow-hidden bg-surface-elevated shrink-0 shadow-2xl border border-white/10">
-          {artist.artworkUrl ? (
-            <img
-              src={artist.artworkUrl}
-              alt={artist.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-900 text-4xl">
-              👤
-            </div>
-          )}
+      {own.length > 0 && (
+        <div className="px-6">
+          <h2 className="px-2 mb-2 text-[18px] font-bold">In your library</h2>
+          <TrackList tracks={own} />
         </div>
-
-        <div className="space-y-2">
-          <span className="text-xs uppercase font-semibold tracking-wider text-purple-400 font-mono">
-            Artist Discography
-          </span>
-          <h1 className="text-3xl font-bold text-white tracking-tight leading-tight">
-            {artist.name}
-          </h1>
-          <p className="text-xs text-zinc-400 font-mono">
-            {artistAlbums.length} {artistAlbums.length === 1 ? "album" : "albums"} • {artistTracks.length} tracks
-          </p>
-
-          <div className="pt-2">
-            <button
-              onClick={() => {
-                if (artistTracks.length > 0) playTrack(artistTracks[0], artistTracks);
-              }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-xs shadow-lg hover:scale-105 active:scale-95 transition-all"
-            >
-              <Play className="w-4 h-4 fill-current ml-0.5" />
-              <span>Play All</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Discography Albums */}
-      {artistAlbums.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Disc3 className="w-4 h-4 text-purple-400" />
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-              Albums & Releases
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {artistAlbums.map((album) => (
-              <AlbumCard key={album.id} album={album} />
-            ))}
-          </div>
-        </section>
       )}
 
-      {/* Tracks */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-          Top Tracks
-        </h2>
-        <div className="space-y-1">
-          {artistTracks.map((track, idx) => (
-            <TrackRow
-              key={track.id}
-              track={track}
-              index={idx}
-              playlistContext={artistTracks}
-            />
-          ))}
+      {ownAlbums.length > 0 && (
+        <div className="px-8">
+          <Section title="Albums" className="mt-10">
+            <TileGrid>
+              {ownAlbums.map((a) => {
+                const at = tracks.filter((t) => albumIdFor(t) === a.id);
+                return (
+                  <MediaTile
+                    key={a.id}
+                    title={a.title}
+                    subtitle={a.year ? String(a.year) : plural(a.trackCount, "song")}
+                    artworkUrl={a.artworkUrl}
+                    onOpen={() => navigate("album-detail", { albumId: a.id })}
+                    onPlay={at.length ? () => usePlayerStore.getState().playTrack(at[0], at) : undefined}
+                  />
+                );
+              })}
+            </TileGrid>
+          </Section>
         </div>
-      </section>
+      )}
+
+      {streamed.length > 0 && (
+        <div className="px-6 mt-10">
+          <h2 className="px-2 mb-2 text-[18px] font-bold">Streaming</h2>
+          <TrackList tracks={streamed} />
+        </div>
+      )}
     </div>
   );
 };
