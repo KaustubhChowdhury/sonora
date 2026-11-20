@@ -6,6 +6,12 @@ import { useAudioStudioStore } from "./stores/audioStudioStore";
 import { usePlayerStore } from "./stores/playerStore";
 import { TauriBridge } from "./services/tauriBridge";
 import { useAmbientColor } from "./hooks/useAmbientColor";
+import "./services/autoplay";
+
+// Dev builds only: handle for inspecting state from devtools.
+if (import.meta.env.DEV) {
+  (window as any).__sonora = { usePlayerStore, useLibraryStore, TauriBridge };
+}
 
 export const App: React.FC = () => {
   useAmbientColor();

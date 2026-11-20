@@ -16,6 +16,11 @@ interface PlayerState {
   queue: Track[];
   queueIndex: number;
   outputStatus: AudioOutputStatus;
+  /** Keep playing similar songs when the queue runs out */
+  autoplay: boolean;
+  /** Ids of queue entries that autoplay added, so the queue can label them */
+  autoplayIds: string[];
+  autoplayLoading: boolean;
   
   // Actions
   playTrack: (track: Track, newQueue?: Track[]) => void;
@@ -37,6 +42,7 @@ interface PlayerState {
   setCurrentTime: (timeMs: number) => void;
   setDuration: (durationMs: number) => void;
   setTrackFavourite: (trackId: string, isFav: boolean) => void;
+  toggleAutoplay: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -52,6 +58,9 @@ export const usePlayerStore = create<PlayerState>()(
   repeatMode: "off",
   queue: [],
   queueIndex: -1,
+  autoplay: true,
+  autoplayIds: [],
+  autoplayLoading: false,
   outputStatus: {
     mode: "shared",
     deviceName: "Windows Default Endpoint (Direct WASAPI)",
@@ -87,6 +96,8 @@ export const usePlayerStore = create<PlayerState>()(
     set({
       currentTrack: track,
       queue,
+      // A fresh queue drops the old autoplay labels
+      ...(newQueue ? { autoplayIds: [] } : {}),
       queueIndex: index,
       isPlaying: true,
       currentTimeMs: 0,
@@ -135,8 +146,13 @@ export const usePlayerStore = create<PlayerState>()(
   },
 
   nextTrack: () => {
-    const { queue, queueIndex, repeatMode, isShuffle } = get();
+    const { queue, queueIndex, repeatMode, isShuffle, currentTrack, currentTimeMs, durationMs } = get();
     if (queue.length === 0) return;
+
+    // Leaving a song in its first 30 seconds counts as a skip and lowers its weight in recommendations.
+    if (currentTrack && currentTimeMs < 30_000 && durationMs > 60_000) {
+      useLibraryStore.getState().recordSkip(currentTrack);
+    }
 
     if (repeatMode === "one") {
       set({ currentTimeMs: 0, isPlaying: true });
@@ -153,6 +169,12 @@ export const usePlayerStore = create<PlayerState>()(
     } else if (nextIdx >= queue.length) {
       if (repeatMode === "all") {
         nextIdx = 0;
+      } else if (get().autoplay && currentTrack) {
+        // Queue ran out: hold here (so position clocks stop firing "next") and fetch similar songs.
+        set({ isPlaying: false });
+        AudioEngine.pause();
+        import("../services/autoplay").then((m) => m.continueAfterQueueEnd(currentTrack.id));
+        return;
       } else {
         set({ isPlaying: false });
         AudioEngine.pause();
@@ -285,6 +307,8 @@ export const usePlayerStore = create<PlayerState>()(
   setCurrentTime: (timeMs) => set({ currentTimeMs: timeMs }),
   setDuration: (durationMs) => set({ durationMs: durationMs }),
 
+  toggleAutoplay: () => set((s) => ({ autoplay: !s.autoplay })),
+
   setTrackFavourite: (trackId, isFav) => {
     set((state) => {
       const updatedQueue = state.queue.map((t) =>
@@ -306,6 +330,8 @@ export const usePlayerStore = create<PlayerState>()(
       isMuted: s.isMuted,
       isShuffle: s.isShuffle,
       repeatMode: s.repeatMode,
+      autoplay: s.autoplay,
+      autoplayIds: s.autoplayIds,
       // Restore what was playing (paused) on the next launch
       currentTrack: s.currentTrack,
       durationMs: s.durationMs,
