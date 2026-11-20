@@ -41,9 +41,14 @@ interface UiState {
   contextMenu: ContextMenuState;
   toastMessage: string | null;
   globalSearchQuery: string;
+  history: { route: AppRoute; albumId: string | null; artistId: string | null; playlistId: string | null }[];
+  newPlaylist: { open: boolean; tracks: Track[] };
 
   // Actions
   navigate: (route: AppRoute, params?: { albumId?: string; artistId?: string; playlistId?: string }) => void;
+  goBack: () => void;
+  openNewPlaylist: (tracks?: Track[]) => void;
+  closeNewPlaylist: () => void;
   setGlobalSearchQuery: (q: string) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
@@ -71,7 +76,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   isFullPlayerOpen: false,
   isCommandPaletteOpen: false,
   isOnboardingOpen: false,
-  sidebarOpen: false,
+  sidebarOpen: true,
 
   contextMenu: {
     isOpen: false,
@@ -81,15 +86,44 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
   toastMessage: null,
   globalSearchQuery: "",
+  history: [],
+  newPlaylist: { open: false, tracks: [] },
 
   navigate: (route, params) => {
+    const cur = get();
+    const same =
+      cur.activeRoute === route &&
+      cur.selectedAlbumId === (params?.albumId ?? null) &&
+      cur.selectedArtistId === (params?.artistId ?? null) &&
+      cur.selectedPlaylistId === (params?.playlistId ?? null);
+    if (same) return;
     set({
+      history: [
+        ...cur.history.slice(-30),
+        { route: cur.activeRoute, albumId: cur.selectedAlbumId, artistId: cur.selectedArtistId, playlistId: cur.selectedPlaylistId },
+      ],
       activeRoute: route,
       selectedAlbumId: params?.albumId ?? null,
       selectedArtistId: params?.artistId ?? null,
       selectedPlaylistId: params?.playlistId ?? null,
     });
   },
+
+  goBack: () => {
+    const h = get().history;
+    const prev = h[h.length - 1];
+    if (!prev) return;
+    set({
+      history: h.slice(0, -1),
+      activeRoute: prev.route,
+      selectedAlbumId: prev.albumId,
+      selectedArtistId: prev.artistId,
+      selectedPlaylistId: prev.playlistId,
+    });
+  },
+
+  openNewPlaylist: (tracks = []) => set({ newPlaylist: { open: true, tracks } }),
+  closeNewPlaylist: () => set({ newPlaylist: { open: false, tracks: [] } }),
 
   setGlobalSearchQuery: (globalSearchQuery: string) => {
     set({ globalSearchQuery });
