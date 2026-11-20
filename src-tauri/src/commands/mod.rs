@@ -8,7 +8,7 @@ use crate::db::Database;
 use crate::library::scanner::{DbTrack, LibraryScanner, ScanResult};
 use crate::metadata::lyrics::{LyricsResult, LyricsService};
 use crate::providers::jamendo::{JamendoProvider, JamendoTrackItem};
-use crate::providers::jiosaavn::{JioSaavnProvider, JioSaavnTrackItem};
+use crate::providers::jiosaavn::{JioSaavnHome, JioSaavnProvider, JioSaavnTrackItem};
 use crate::providers::subsonic::{SubsonicConfig, SubsonicProvider, SubsonicTrackItem};
 use crate::providers::youtube::{YouTubeProvider, YouTubeTrackItem};
 
@@ -282,6 +282,26 @@ pub async fn search_youtube(
         Err(e) => println!("[Sonora Backend] search_youtube error: {}", e),
     }
     results
+}
+
+#[tauri::command]
+pub async fn jiosaavn_radio(song_id: String, limit: Option<usize>) -> Result<Vec<JioSaavnTrackItem>, String> {
+    JioSaavnProvider::song_radio(&song_id, limit.unwrap_or(20)).await
+}
+
+#[tauri::command]
+pub async fn jiosaavn_home() -> Result<JioSaavnHome, String> {
+    JioSaavnProvider::home().await
+}
+
+#[tauri::command]
+pub async fn jiosaavn_collection(kind: String, id: String, limit: Option<usize>) -> Result<Vec<JioSaavnTrackItem>, String> {
+    JioSaavnProvider::collection_songs(&kind, &id, limit.unwrap_or(50)).await
+}
+
+#[tauri::command]
+pub async fn youtube_mix(video_id: String, limit: Option<usize>) -> Result<Vec<YouTubeTrackItem>, String> {
+    YouTubeProvider::mix(&video_id, limit.unwrap_or(20)).await
 }
 
 #[tauri::command]

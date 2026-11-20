@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-youtube-mix"
+description = "Enables the youtube_mix command without any pre-configured scope."
+commands.allow = ["youtube_mix"]
+
+[[permission]]
+identifier = "deny-youtube-mix"
+description = "Denies the youtube_mix command without any pre-configured scope."
+commands.deny = ["youtube_mix"]

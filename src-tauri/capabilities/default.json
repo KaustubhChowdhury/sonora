@@ -38,6 +38,10 @@
     "allow-search-jamendo",
     "allow-search-jiosaavn",
     "allow-search-youtube",
+    "allow-jiosaavn-radio",
+    "allow-jiosaavn-home",
+    "allow-jiosaavn-collection",
+    "allow-youtube-mix",
     "allow-test-subsonic-connection",
     "allow-search-subsonic",
     "allow-open-external"

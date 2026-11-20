@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiosaavn-collection"
+description = "Enables the jiosaavn_collection command without any pre-configured scope."
+commands.allow = ["jiosaavn_collection"]
+
+[[permission]]
+identifier = "deny-jiosaavn-collection"
+description = "Denies the jiosaavn_collection command without any pre-configured scope."
+commands.deny = ["jiosaavn_collection"]

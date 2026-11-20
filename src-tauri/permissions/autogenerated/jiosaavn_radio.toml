@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiosaavn-radio"
+description = "Enables the jiosaavn_radio command without any pre-configured scope."
+commands.allow = ["jiosaavn_radio"]
+
+[[permission]]
+identifier = "deny-jiosaavn-radio"
+description = "Denies the jiosaavn_radio command without any pre-configured scope."
+commands.deny = ["jiosaavn_radio"]
