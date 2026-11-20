@@ -1,59 +1,48 @@
 import React, { useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { usePlayerStore } from "../../stores/playerStore";
+import { useUiStore } from "../../stores/uiStore";
 import { AudioEngine } from "../../services/audioEngine";
 import { YoutubeIcon } from "../shared/ProviderIcons";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { IconButton } from "../ui/primitives";
+import { cn } from "../../lib/cn";
 
+/**
+ * YouTube tracks play through the official embedded player, which must stay mounted and visible
+ * (YouTube's terms don't allow hiding it). It sits above the player bar and can be collapsed to a strip.
+ */
 export const YouTubeHost: React.FC = () => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const { currentTrack } = usePlayerStore();
-  const [isMinimized, setIsMinimized] = useState(false);
-
-  const isYouTubeActive =
-    currentTrack?.providerId === "youtube" || !!currentTrack?.youtubeVideoId;
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const inspectorOpen = useUiStore((s) => s.inspectorOpen);
+  const [collapsed, setCollapsed] = useState(false);
+  const active = currentTrack?.providerId === "youtube" || !!currentTrack?.youtubeVideoId;
 
   useEffect(() => {
-    if (iframeRef.current) {
-      AudioEngine.registerYouTubeIframe(iframeRef.current);
-    }
+    AudioEngine.registerYouTubeIframe(iframeRef.current);
   }, []);
 
   return (
     <div
-      className={`fixed bottom-24 right-6 z-40 bg-[#141821] border border-red-500/30 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 flex flex-col ${
-        !isYouTubeActive
-          ? "pointer-events-none opacity-0 -bottom-96 w-64 h-36"
-          : isMinimized
-          ? "w-72 h-14"
-          : "w-80 h-52"
-      }`}
+      aria-hidden={!active}
+      className={cn(
+        "fixed bottom-[96px] z-40 w-[320px] rounded-lg overflow-hidden bg-surface-elevated border border-line-strong shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200",
+        inspectorOpen ? "right-[364px]" : "right-4",
+        active ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+      )}
     >
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#0b0d12] border-b border-white/[0.08] select-none text-xs">
-        <div className="flex items-center gap-2 truncate">
-          <YoutubeIcon className="w-3.5 h-3.5 text-red-500 shrink-0" />
-          <span className="font-semibold text-white truncate text-[11px]">
-            {currentTrack?.title || "YouTube Music"}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 text-zinc-400">
-          <button
-            onClick={() => setIsMinimized(!isMinimized)}
-            className="p-1 hover:text-white rounded"
-            title={isMinimized ? "Expand video" : "Minimize video"}
-          >
-            {isMinimized ? <Maximize2 className="w-3 h-3" /> : <Minimize2 className="w-3 h-3" />}
-          </button>
-        </div>
+      <div className="flex items-center gap-2 h-9 pl-3 pr-1">
+        <YoutubeIcon className="w-4 h-4 text-ink-2 shrink-0" />
+        <span className="flex-1 text-[12px] text-ink-2 truncate">{currentTrack?.title ?? "YouTube"}</span>
+        <IconButton label={collapsed ? "Show video" : "Hide video"} size="sm" onClick={() => setCollapsed((c) => !c)}>
+          {collapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </IconButton>
       </div>
-
-      {/* Embedded 16:9 compliant YouTube IFrame */}
-      <div className={`flex-1 relative bg-black ${isMinimized ? "hidden" : "block"}`}>
+      <div className={cn("aspect-video bg-black", collapsed && "h-0 aspect-auto")}>
         <iframe
           ref={iframeRef}
-          id="sonora-yt-host"
+          title="YouTube player"
           className="w-full h-full border-0"
-          title="YouTube Music Player"
           allow="autoplay; encrypted-media; picture-in-picture"
         />
       </div>
