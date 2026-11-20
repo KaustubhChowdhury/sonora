@@ -68,7 +68,7 @@ export const CURATED_YOUTUBE_HITS: Track[] = [
     codec: "Opus",
     sampleRate: 48000,
     bitrate: 160,
-    artworkUrl: "https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg",
+    artworkUrl: "https://i.ytimg.com/vi/34Na4j8AVgA/mqdefault.jpg",
     attribution: "YouTube",
   },
   {
@@ -85,7 +85,7 @@ export const CURATED_YOUTUBE_HITS: Track[] = [
     codec: "Opus",
     sampleRate: 48000,
     bitrate: 160,
-    artworkUrl: "https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg",
+    artworkUrl: "https://i.ytimg.com/vi/4NRXx6U8ABQ/mqdefault.jpg",
     attribution: "YouTube",
   },
   {
@@ -102,7 +102,7 @@ export const CURATED_YOUTUBE_HITS: Track[] = [
     codec: "Opus",
     sampleRate: 48000,
     bitrate: 160,
-    artworkUrl: "https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg",
+    artworkUrl: "https://i.ytimg.com/vi/JGwWNGJdvx8/mqdefault.jpg",
     attribution: "YouTube",
   },
   {
@@ -119,7 +119,7 @@ export const CURATED_YOUTUBE_HITS: Track[] = [
     codec: "Opus",
     sampleRate: 48000,
     bitrate: 160,
-    artworkUrl: "https://i.ytimg.com/vi/kJQP7kiw5Fk/hqdefault.jpg",
+    artworkUrl: "https://i.ytimg.com/vi/kJQP7kiw5Fk/mqdefault.jpg",
     attribution: "YouTube",
   },
 ];
