@@ -31,6 +31,100 @@ export const setJamendoClientId = (id: string) => {
   }
 };
 
+export interface SaavnCollection {
+  id: string;
+  title: string;
+  subtitle: string;
+  image: string;
+  kind: "playlist" | "album" | "song";
+}
+export interface SaavnHome {
+  newReleases: SaavnCollection[];
+  charts: SaavnCollection[];
+  topPlaylists: SaavnCollection[];
+  trending: SaavnCollection[];
+}
+
+async function callTracks(cmd: string, args: Record<string, unknown>, map: (x: any) => Track): Promise<Track[]> {
+  if (!isTauri()) return [];
+  try {
+    const items = await invoke<any[]>(cmd, args);
+    return Array.isArray(items) ? items.map(map) : [];
+  } catch (err) {
+    console.error(`[TauriBridge] ${cmd} failed:`, err);
+    return [];
+  }
+}
+
+const mapSaavn = (item: any): Track => ({
+  id: `jio_${item.id}`,
+  title: item.title,
+  artists: item.artists?.length ? item.artists : ["Unknown artist"],
+  album: item.album,
+  durationMs: (item.duration_seconds || 180) * 1000,
+  sourceKind: "stream",
+  providerId: "jiosaavn",
+  providerTrackId: item.id,
+  streamUrl: item.stream_url,
+  codec: "AAC",
+  sampleRate: 44100,
+  bitrate: item.bitrate || 320,
+  channels: 2,
+  year: item.year ? Number(item.year) || undefined : undefined,
+  artworkUrl: item.image,
+  attribution: "JioSaavn",
+  downloadAllowed: false,
+  cachingAllowed: false,
+});
+
+/**
+ * YouTube results come as "Artist - Song (Official Video)" from channels like "ArtistVEVO"
+ * or "Artist - Topic". Split them into a clean title and artist.
+ */
+export function cleanYouTube(rawTitle: string, channel: string): { title: string; artist: string } {
+  const strip = (t: string) =>
+    t
+      .replace(/\s*[\(\[][^)\]]*(official|video|audio|lyric|visuali[sz]er|hd|4k|mv|m\/v)[^)\]]*[\)\]]/gi, "")
+      .replace(/\s*\|.*$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  const cleanChannel = channel.replace(/VEVO$/i, "").replace(/\s*-\s*Topic$/i, "").replace(/official/i, "").trim() || channel;
+  const m = rawTitle.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  // "Song - Lyrical Video" / "Song - Full Video Song": the right side isn't an artist split.
+  if (m && /^(lyric(al)?|official|full|video|audio|song|hd|4k|8k)(\s|$)/i.test(strip(m[2]) || m[2])) {
+    return { title: strip(m[1]) || m[1], artist: cleanChannel };
+  }
+  if (m) {
+    // Drop "ft. X" / "feat. X" — only as a separate word, so "Daft Punk" survives.
+    const artist = m[1].replace(/\s+(ft\.?|feat\.?|featuring)\s.*$/i, "").trim();
+    return { title: strip(m[2]) || strip(rawTitle), artist };
+  }
+  return { title: strip(rawTitle) || rawTitle, artist: cleanChannel };
+}
+
+const mapYouTube = (item: any): Track => {
+  const { title, artist } = cleanYouTube(item.title, item.channel);
+  return {
+    id: item.id,
+    title,
+    artists: [artist],
+    album: undefined,
+    durationMs: (item.duration_seconds || 180) * 1000,
+    sourceKind: "video",
+    providerId: "youtube",
+    providerTrackId: item.youtube_video_id,
+    youtubeVideoId: item.youtube_video_id,
+    codec: "Opus",
+    sampleRate: 48000,
+    bitrate: 160,
+    channels: 2,
+    artworkUrl: item.thumbnail,
+    attribution: `YouTube · ${item.channel}`,
+    downloadAllowed: false,
+    cachingAllowed: false,
+  };
+};
+
 export class TauriBridge {
   static async play(path: string): Promise<void> {
     if (isTauri()) {
@@ -409,66 +503,44 @@ export class TauriBridge {
   }
 
   static async searchJioSaavn(query: string, limit = 20): Promise<Track[]> {
-    try {
-      const items = await invoke<any[]>("search_jiosaavn", { query, limit });
-      if (items && Array.isArray(items)) {
-        return items.map((item) => ({
-          id: `jio_${item.id}`,
-          title: item.title,
-          artists: item.artists,
-          album: item.album,
-          durationMs: (item.duration_seconds || 180) * 1000,
-          sourceKind: "stream" as SourceKind,
-          providerId: "jiosaavn",
-          providerTrackId: item.id,
-          streamUrl: item.stream_url,
-          codec: "AAC",
-          sampleRate: 44100,
-          bitDepth: 16,
-          bitrate: item.bitrate || 320,
-          channels: 2,
-          artworkUrl: item.image,
-          attribution: `JioSaavn Music`,
-          downloadAllowed: false,
-          cachingAllowed: false,
-        }));
-      }
-    } catch (err) {
-      console.error("[TauriBridge] search_jiosaavn invoke failed:", err);
-    }
-    return [];
+    return callTracks("search_jiosaavn", { query, limit }, mapSaavn);
   }
 
   static async searchYouTube(query: string, limit = 20): Promise<Track[]> {
+    return callTracks("search_youtube", { query, limit }, mapYouTube);
+  }
+
+  /** Songs similar to a JioSaavn song (JioSaavn's song radio). */
+  static async jiosaavnRadio(songId: string, limit = 20): Promise<Track[]> {
+    return callTracks("jiosaavn_radio", { songId, limit }, mapSaavn);
+  }
+
+  /** YouTube's auto-generated mix for a video. */
+  static async youtubeMix(videoId: string, limit = 20): Promise<Track[]> {
+    return callTracks("youtube_mix", { videoId, limit }, mapYouTube);
+  }
+
+  /** Songs in a JioSaavn playlist, album or single from the home feed. */
+  static async jiosaavnCollection(kind: string, id: string, limit = 50): Promise<Track[]> {
+    return callTracks("jiosaavn_collection", { kind, id, limit }, mapSaavn);
+  }
+
+  static async jiosaavnHome(): Promise<SaavnHome | null> {
+    if (!isTauri()) return null;
     try {
-      const items = await invoke<any[]>("search_youtube", { query, limit });
-      if (items && Array.isArray(items)) {
-        return items.map((item) => ({
-          id: item.id,
-          title: item.title,
-          artists: [item.channel],
-          album: "YouTube Music",
-          durationMs: (item.duration_seconds || 180) * 1000,
-          sourceKind: "video" as SourceKind,
-          providerId: "youtube",
-          providerTrackId: item.youtube_video_id,
-          youtubeVideoId: item.youtube_video_id,
-          streamUrl: `https://www.youtube.com/watch?v=${item.youtube_video_id}`,
-          codec: "Opus",
-          sampleRate: 48000,
-          bitDepth: 16,
-          bitrate: 160,
-          channels: 2,
-          artworkUrl: item.thumbnail,
-          attribution: `YouTube - ${item.channel}`,
-          downloadAllowed: false,
-          cachingAllowed: false,
-        }));
-      }
+      const raw = await invoke<any>("jiosaavn_home");
+      const map = (xs: any[]): SaavnCollection[] =>
+        (xs || []).map((x) => ({ id: x.id, title: x.title, subtitle: x.subtitle, image: x.image, kind: x.kind }));
+      return {
+        newReleases: map(raw.new_releases),
+        charts: map(raw.charts),
+        topPlaylists: map(raw.top_playlists),
+        trending: map(raw.trending),
+      };
     } catch (err) {
-      console.error("[TauriBridge] search_youtube invoke failed:", err);
+      console.error("[TauriBridge] jiosaavn_home failed:", err);
+      return null;
     }
-    return [];
   }
 
   static async openExternal(url: string): Promise<void> {
