@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { Track, AudioOutputStatus } from "../types/music";
 import { AudioEngine } from "../services/audioEngine";
 import { useLibraryStore } from "./libraryStore";
@@ -38,7 +39,9 @@ interface PlayerState {
   setTrackFavourite: (trackId: string, isFav: boolean) => void;
 }
 
-export const usePlayerStore = create<PlayerState>((set, get) => ({
+export const usePlayerStore = create<PlayerState>()(
+  persist(
+  (set, get) => ({
   currentTrack: null,
   isPlaying: false,
   currentTimeMs: 0,
@@ -143,8 +146,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     let nextIdx = queueIndex + 1;
-    if (isShuffle) {
-      nextIdx = Math.floor(Math.random() * queue.length);
+    if (isShuffle && queue.length > 1) {
+      do {
+        nextIdx = Math.floor(Math.random() * queue.length);
+      } while (nextIdx === queueIndex);
     } else if (nextIdx >= queue.length) {
       if (repeatMode === "all") {
         nextIdx = 0;
@@ -199,12 +204,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   setVolume: (vol: number) => {
     const clamped = Math.max(0, Math.min(1, vol));
-    set({ volume: clamped, isMuted: clamped === 0 });
+    set({ volume: clamped, isMuted: false });
     AudioEngine.setVolume(clamped);
   },
 
   toggleMute: () => {
-    set((state) => ({ isMuted: !state.isMuted }));
+    const muted = !get().isMuted;
+    set({ isMuted: muted });
+    AudioEngine.setVolume(muted ? 0 : get().volume);
   },
 
   toggleShuffle: () => {
@@ -290,4 +297,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       return { queue: updatedQueue, currentTrack: updatedCurrent };
     });
   },
-}));
+}),
+  {
+    name: "sonora-player",
+    storage: createJSONStorage(() => localStorage),
+    partialize: (s) => ({
+      volume: s.volume,
+      isMuted: s.isMuted,
+      isShuffle: s.isShuffle,
+      repeatMode: s.repeatMode,
+      // Restore what was playing (paused) on the next launch
+      currentTrack: s.currentTrack,
+      durationMs: s.durationMs,
+      queue: s.queue.slice(0, 300),
+      queueIndex: s.queueIndex < 300 ? s.queueIndex : -1,
+    }),
+  }
+  )
+);
