@@ -1,424 +1,255 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  Search,
-  Music,
-  Play,
-  Loader2,
-  Sparkles,
-  X,
-  HardDrive,
-  Globe,
-  Flame,
-  Radio,
-  Sliders,
-  Disc,
-} from "lucide-react";
-import { YoutubeIcon } from "../../components/shared/ProviderIcons";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Clock, X } from "lucide-react";
 import { useLibraryStore } from "../../stores/libraryStore";
 import { usePlayerStore } from "../../stores/playerStore";
 import { useUiStore } from "../../stores/uiStore";
+import { TauriBridge, isTauri } from "../../services/tauriBridge";
 import { Track } from "../../types/music";
-import { TrackRow } from "../../components/shared/TrackRow";
-import { TauriBridge } from "../../services/tauriBridge";
+import { Artwork, EmptyState, PlayButton, Tabs } from "../../components/ui/primitives";
+import { TrackList, TrackRow } from "../../components/shared/TrackRow";
+import { sourceLabel } from "../../lib/format";
+import { useProviderStore } from "../../stores/providerStore";
 
-const POPULAR_SEARCH_TAGS = [
-  "🔥 Phonk Drift",
-  "⚡ The Weeknd",
-  "✨ Apna Bana Le",
-  "🦁 Sidhu Moosewala",
-  "🎧 Lo-Fi Beats",
-  "👑 Arijit Singh",
-  "🏎️ DVRST - Close Eyes",
-  "💎 Starboy",
-  "💥 Metamorphosis",
-  "🌙 Diljit Dosanjh",
-  "🎸 Rock & Electric",
-  "📻 Synthwave 80s",
-];
+const RECENTS_KEY = "sonora-recent-searches";
+const BROWSE = ["Arijit Singh", "Lo-fi", "Punjabi hits", "90s Bollywood", "The Weeknd", "Coke Studio", "Indie", "Workout", "Jazz", "Tamil hits"];
+
+const loadRecents = (): string[] => {
+  try {
+    return JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+};
+
+function rank(items: Track[], q: string) {
+  const s = q.toLowerCase().trim();
+  const score = (t: Track) => {
+    const title = t.title.toLowerCase();
+    const artist = t.artists.join(" ").toLowerCase();
+    if (title === s) return 0;
+    if (title.startsWith(s)) return 1;
+    if (artist === s) return 2;
+    if (title.includes(s)) return 3;
+    if (artist.includes(s)) return 4;
+    return 5;
+  };
+  return items
+    .map((t, i) => ({ t, i, s: score(t) }))
+    .sort((a, b) => a.s - b.s || a.i - b.i)
+    .map((x) => x.t);
+}
+
+type Tab = "all" | "jiosaavn" | "youtube" | "server" | "local";
 
 export const SearchScreen: React.FC = () => {
   const { tracks } = useLibraryStore();
-  const { playTrack, currentTrack, isPlaying } = usePlayerStore();
-  const { showToast, globalSearchQuery, setGlobalSearchQuery } = useUiStore();
+  const { globalSearchQuery: query, setGlobalSearchQuery } = useUiStore();
+  const [tab, setTab] = useState<Tab>("all");
+  const [loading, setLoading] = useState(false);
+  const [saavn, setSaavn] = useState<Track[]>([]);
+  const [yt, setYt] = useState<Track[]>([]);
+  const [srv, setSrv] = useState<Track[]>([]);
+  const subsonic = useProviderStore((s) => s.subsonic);
+  const [recents, setRecents] = useState<string[]>(loadRecents);
+  const reqId = useRef(0);
 
-  const [activeTab, setActiveTab] = useState<"all" | "jiosaavn" | "youtube" | "local">("all");
-  const [isSearching, setIsSearching] = useState(false);
-  const [jiosaavnResults, setJiosaavnResults] = useState<Track[]>([]);
-  const [youtubeResults, setYoutubeResults] = useState<Track[]>([]);
-  const [localResults, setLocalResults] = useState<Track[]>([]);
+  const q = query.trim();
 
-  const debounceTimerRef = useRef<any>(null);
+  const local = useMemo(() => {
+    if (q.length < 2) return [];
+    const s = q.toLowerCase();
+    return rank(
+      tracks.filter(
+        (t) => t.title.toLowerCase().includes(s) || t.artists.some((a) => a.toLowerCase().includes(s)) || t.album?.toLowerCase().includes(s)
+      ),
+      q
+    );
+  }, [q, tracks]);
 
-  // Relevance ranking algorithm
-  const rankTracks = (items: Track[], queryStr: string) => {
-    const q = queryStr.toLowerCase().trim();
-    if (!q) return items;
-    return [...items].sort((a, b) => {
-      const aTitle = a.title.toLowerCase();
-      const bTitle = b.title.toLowerCase();
-      const aArtist = a.artists ? a.artists.join(" ").toLowerCase() : "";
-      const bArtist = b.artists ? b.artists.join(" ").toLowerCase() : "";
-
-      // Exact title match gets #1 priority
-      if (aTitle === q && bTitle !== q) return -1;
-      if (bTitle === q && aTitle !== q) return 1;
-
-      // Title starts with query
-      if (aTitle.startsWith(q) && !bTitle.startsWith(q)) return -1;
-      if (bTitle.startsWith(q) && !aTitle.startsWith(q)) return 1;
-
-      // Title contains query
-      if (aTitle.includes(q) && !bTitle.includes(q)) return -1;
-      if (bTitle.includes(q) && !aTitle.includes(q)) return 1;
-
-      // Artist contains query
-      if (aArtist.includes(q) && !bArtist.includes(q)) return -1;
-      if (bArtist.includes(q) && !aArtist.includes(q)) return 1;
-
-      return 0;
-    });
-  };
-
-  const executeSearch = async (searchTerm: string) => {
-    const q = searchTerm.trim();
-    if (!q) {
-      setJiosaavnResults([]);
-      setYoutubeResults([]);
-      setLocalResults([]);
+  useEffect(() => {
+    if (q.length < 2) {
+      setSaavn([]);
+      setYt([]);
+      setSrv([]);
+      setLoading(false);
       return;
     }
-
-    setIsSearching(true);
-    try {
-      // Local library matches
-      const localMatches = tracks.filter((t) => {
-        const queryLower = q.toLowerCase();
-        return (
-          t.title.toLowerCase().includes(queryLower) ||
-          t.artists.some((a) => a.toLowerCase().includes(queryLower)) ||
-          t.album?.toLowerCase().includes(queryLower)
-        );
-      });
-      setLocalResults(localMatches);
-
-      // Simultaneously query both JioSaavn (320kbps Lossless) and YouTube Music
-      const [jioRes, ytRes] = await Promise.allSettled([
-        TauriBridge.searchJioSaavn(q, 25),
-        TauriBridge.searchYouTube(q, 25),
+    const id = ++reqId.current;
+    setLoading(true);
+    const timer = setTimeout(async () => {
+      const [s, y, v] = await Promise.allSettled([
+        TauriBridge.searchJioSaavn(q, 30),
+        TauriBridge.searchYouTube(q, 30),
+        subsonic.isConnected ? TauriBridge.searchSubsonic(subsonic, q) : Promise.resolve([]),
       ]);
+      if (id !== reqId.current) return; // a newer search has started
+      setSaavn(s.status === "fulfilled" ? rank(s.value, q) : []);
+      setYt(y.status === "fulfilled" ? rank(y.value, q) : []);
+      setSrv(v.status === "fulfilled" ? rank(v.value, q) : []);
+      setLoading(false);
+      const next = [q, ...loadRecents().filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+      localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+      setRecents(next);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [q, subsonic.isConnected]);
 
-      if (jioRes.status === "fulfilled") {
-        setJiosaavnResults(rankTracks(jioRes.value, q));
-      }
-      if (ytRes.status === "fulfilled") {
-        setYoutubeResults(rankTracks(ytRes.value, q));
-      }
-    } catch (err) {
-      console.error("Search error:", err);
-    } finally {
-      setIsSearching(false);
-    }
-  };
+  if (q.length < 2) {
+    return (
+      <div className="flex-1 overflow-y-auto px-8 pb-16">
+        <h1 className="pt-8 pb-6 text-[32px] font-bold tracking-[-0.02em]">Search</h1>
+        {recents.length > 0 && (
+          <section className="mb-10 max-w-xl">
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="text-[15px] font-semibold">Recent searches</h2>
+              <button
+                className="text-[12px] text-ink-3 hover:text-ink"
+                onClick={() => {
+                  localStorage.removeItem(RECENTS_KEY);
+                  setRecents([]);
+                }}
+              >
+                Clear
+              </button>
+            </div>
+            {recents.map((r) => (
+              <div key={r} className="group flex items-center gap-3 h-9 px-2 -mx-2 rounded-md hover:bg-white/[0.04]">
+                <Clock className="w-4 h-4 text-ink-3" />
+                <button className="flex-1 text-left text-[13px] text-ink" onClick={() => setGlobalSearchQuery(r)}>
+                  {r}
+                </button>
+                <button
+                  aria-label={`Remove ${r}`}
+                  className="opacity-0 group-hover:opacity-100 text-ink-3 hover:text-ink"
+                  onClick={() => {
+                    const next = recents.filter((x) => x !== r);
+                    localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+                    setRecents(next);
+                  }}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
+        <section>
+          <h2 className="text-[15px] font-semibold mb-3">Try searching for</h2>
+          <div className="flex flex-wrap gap-2 max-w-3xl">
+            {BROWSE.map((b) => (
+              <button
+                key={b}
+                onClick={() => setGlobalSearchQuery(b)}
+                className="h-9 px-4 rounded-full bg-white/[0.06] hover:bg-white/[0.11] text-[13px] text-ink transition-colors"
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
 
-  // Debounce search on globalSearchQuery change
-  useEffect(() => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-
-    if (globalSearchQuery.trim().length >= 2) {
-      debounceTimerRef.current = setTimeout(() => {
-        executeSearch(globalSearchQuery);
-      }, 250);
-    } else {
-      setJiosaavnResults([]);
-      setYoutubeResults([]);
-      setLocalResults([]);
-    }
-
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    };
-  }, [globalSearchQuery]);
-
-  // Combined and sorted results
-  const allResults = rankTracks(
-    [...jiosaavnResults, ...youtubeResults, ...localResults],
-    globalSearchQuery
-  );
-
-  const bestMatch = allResults.length > 0 ? allResults[0] : null;
-
-  const currentDisplayList =
-    activeTab === "all"
-      ? allResults
-      : activeTab === "jiosaavn"
-      ? jiosaavnResults
-      : activeTab === "youtube"
-      ? youtubeResults
-      : localResults;
-
-  const handleChipClick = (tag: string) => {
-    const clean = tag.replace(/^[^\w]+/, "").trim();
-    setGlobalSearchQuery(clean);
-  };
+  const all = rank([...local, ...srv, ...saavn, ...yt], q);
+  const lists: Record<Tab, Track[]> = { all, jiosaavn: saavn, youtube: yt, server: srv, local };
+  const shown = lists[tab];
+  const nothing = !loading && all.length === 0;
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 pb-48 select-none">
-      {/* Top Search Input Bar */}
-      <div className="max-w-4xl mx-auto space-y-4">
-        <div className="relative flex items-center">
-          <Search className="w-5 h-5 text-zinc-400 absolute left-4 pointer-events-none" />
-          <input
-            type="text"
-            value={globalSearchQuery}
-            onChange={(e) => setGlobalSearchQuery(e.target.value)}
-            placeholder="Search all songs, artists, albums, phonk, or mixes..."
-            className="w-full pl-12 pr-12 py-3.5 rounded-2xl bg-[#12141c]/90 border border-white/[0.12] focus:border-[#b4ff39]/60 focus:bg-[#151824] text-white text-sm placeholder-zinc-500 font-medium transition-all shadow-xl outline-none"
-            autoFocus
-          />
-          {globalSearchQuery && (
-            <button
-              onClick={() => setGlobalSearchQuery("")}
-              className="absolute right-4 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {isSearching && (
-            <Loader2 className="w-4 h-4 text-[#b4ff39] animate-spin absolute right-12" />
-          )}
-        </div>
-
-        {/* Source Filter Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={`px-3.5 py-1.5 rounded-full font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "all"
-                ? "bg-[#b4ff39] text-[#111216] shadow-md shadow-[#b4ff39]/30"
-                : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06]"
-            }`}
-          >
-            <span>All Sources</span>
-            <span className="text-[10px] opacity-70">({allResults.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("jiosaavn")}
-            className={`px-3.5 py-1.5 rounded-full font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "jiosaavn"
-                ? "bg-cyan-400 text-[#111216] shadow-md shadow-cyan-400/30"
-                : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06]"
-            }`}
-          >
-            <Music className="w-3.5 h-3.5" />
-            <span>JioSaavn 320k</span>
-            <span className="text-[10px] opacity-70">({jiosaavnResults.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("youtube")}
-            className={`px-3.5 py-1.5 rounded-full font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "youtube"
-                ? "bg-rose-500 text-white shadow-md shadow-rose-500/30"
-                : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06]"
-            }`}
-          >
-            <YoutubeIcon className="w-3.5 h-3.5" />
-            <span>YouTube Music</span>
-            <span className="text-[10px] opacity-70">({youtubeResults.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("local")}
-            className={`px-3.5 py-1.5 rounded-full font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === "local"
-                ? "bg-emerald-400 text-[#111216] shadow-md shadow-emerald-400/30"
-                : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06]"
-            }`}
-          >
-            <HardDrive className="w-3.5 h-3.5" />
-            <span>Local Vault</span>
-            <span className="text-[10px] opacity-70">({localResults.length})</span>
-          </button>
-        </div>
+    <div className="flex-1 overflow-y-auto pb-16">
+      <div className="px-8 pt-6 pb-4 flex items-center justify-between gap-4 sticky top-0 bg-surface z-20">
+        <Tabs
+          value={tab}
+          onChange={(v) => setTab(v as Tab)}
+          items={[
+            { value: "all", label: "All" },
+            { value: "jiosaavn", label: "JioSaavn", count: loading ? undefined : saavn.length },
+            { value: "youtube", label: "YouTube", count: loading ? undefined : yt.length },
+            ...(subsonic.isConnected ? [{ value: "server", label: "Your server", count: loading ? undefined : srv.length }] : []),
+            { value: "local", label: "Your library", count: local.length },
+          ]}
+        />
+        {loading && <span className="text-[12px] text-ink-3">Searching…</span>}
       </div>
 
-      {/* When Empty: Show Popular Categories & Trending Tags */}
-      {!globalSearchQuery.trim() && (
-        <div className="max-w-4xl mx-auto space-y-6 pt-4">
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-[#b4ff39]" />
-              Popular & Trending Searches
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {POPULAR_SEARCH_TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => handleChipClick(tag)}
-                  className="px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.06] hover:border-[#b4ff39]/40 text-xs font-semibold text-zinc-300 hover:text-white transition-all hover:scale-105 active:scale-95"
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Discover Tiles */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-            <div
-              onClick={() => handleChipClick("Phonk Drift")}
-              className="p-4 rounded-2xl bg-gradient-to-br from-purple-900/40 via-black to-[#0e1017] border border-purple-500/20 hover:border-purple-500/50 cursor-pointer transition-all hover:scale-[1.02] group"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-purple-300 uppercase tracking-wider">
-                  ⚡ Drift & Phonk
-                </span>
-                <Flame className="w-4 h-4 text-purple-400 group-hover:scale-125 transition-transform" />
-              </div>
-              <h4 className="text-base font-black text-white mt-2">Aggressive 808 Cowbell</h4>
-              <p className="text-xs text-zinc-400 mt-1">INTERWORLD, DVRST, Kordhell, Hensonn</p>
-            </div>
-
-            <div
-              onClick={() => handleChipClick("Trending Hindi Top 50")}
-              className="p-4 rounded-2xl bg-gradient-to-br from-cyan-900/40 via-black to-[#0e1017] border border-cyan-500/20 hover:border-cyan-500/50 cursor-pointer transition-all hover:scale-[1.02] group"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-cyan-300 uppercase tracking-wider">
-                  🔥 JioSaavn 320k Hits
-                </span>
-                <Music className="w-4 h-4 text-cyan-400 group-hover:scale-125 transition-transform" />
-              </div>
-              <h4 className="text-base font-black text-white mt-2">Bollywood & Indie Masters</h4>
-              <p className="text-xs text-zinc-400 mt-1">Arijit Singh, Sachin-Jigar, Anuv Jain</p>
-            </div>
-
-            <div
-              onClick={() => handleChipClick("The Weeknd Viral")}
-              className="p-4 rounded-2xl bg-gradient-to-br from-rose-900/40 via-black to-[#0e1017] border border-rose-500/20 hover:border-rose-500/50 cursor-pointer transition-all hover:scale-[1.02] group"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-rose-300 uppercase tracking-wider">
-                  👑 Global Viral Anthems
-                </span>
-                <YoutubeIcon className="w-4 h-4 text-rose-400 group-hover:scale-125 transition-transform" />
-              </div>
-              <h4 className="text-base font-black text-white mt-2">Top Chartbusters</h4>
-              <p className="text-xs text-zinc-400 mt-1">Starboy, Blinding Lights, Metamorphosis</p>
-            </div>
-          </div>
+      {nothing ? (
+        <div className="px-8">
+          <EmptyState
+            title={`No results for “${q}”`}
+            body={
+              isTauri()
+                ? "Check the spelling, or try an artist name instead of a song title."
+                : "JioSaavn and YouTube search run in the desktop app. In the browser preview only your library is searched."
+            }
+          />
         </div>
-      )}
-
-      {/* When Results Are Available */}
-      {globalSearchQuery.trim() && (
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Top Result / Best Match Hero Card */}
-          {bestMatch && activeTab === "all" && (
-            <div className="space-y-2">
-              <h3 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider">
-                Top Result (Best Match)
-              </h3>
-              <div
-                onClick={() => {
-                  playTrack(bestMatch, allResults);
-                  showToast(`Playing "${bestMatch.title}"`);
-                }}
-                className="relative overflow-hidden p-5 rounded-3xl bg-gradient-to-r from-white/[0.07] via-white/[0.04] to-[#12141c] border border-white/[0.12] hover:border-[#b4ff39]/50 transition-all cursor-pointer group flex items-center justify-between shadow-2xl"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-zinc-800 shrink-0 shadow-lg border border-white/10">
-                    {bestMatch.artworkUrl ? (
-                      <img
-                        src={bestMatch.artworkUrl}
-                        alt={bestMatch.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                        <Music className="w-8 h-8" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-1 max-w-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#b4ff39] text-[#111216]">
-                        BEST MATCH
-                      </span>
-                      {bestMatch.providerId === "jiosaavn" ? (
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-500/40">
-                          320kbps AAC
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-red-950 text-red-300 border border-red-500/40">
-                          YouTube Music
-                        </span>
-                      )}
-                    </div>
-                    <h2 className="text-xl font-black text-white group-hover:text-[#b4ff39] transition-colors leading-tight">
-                      {bestMatch.title}
-                    </h2>
-                    <p className="text-xs text-zinc-300 font-medium">
-                      {bestMatch.artists ? bestMatch.artists.join(", ") : "Unknown Artist"} •{" "}
-                      {bestMatch.album || "Single"}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    playTrack(bestMatch, allResults);
-                    showToast(`Playing "${bestMatch.title}"`);
-                  }}
-                  className="w-12 h-12 rounded-full bg-[#b4ff39] hover:bg-[#a3e635] text-[#111216] flex items-center justify-center shadow-xl shadow-[#b4ff39]/40 hover:scale-110 active:scale-95 transition-all shrink-0 ml-4"
-                >
-                  <Play className="w-5 h-5 fill-current ml-0.5" />
-                </button>
-              </div>
-            </div>
+      ) : tab === "all" && all.length > 0 ? (
+        <div className="px-8 grid grid-cols-[minmax(280px,380px)_minmax(0,1fr)] gap-8">
+          <section>
+            <h2 className="text-[18px] font-bold mb-3">Top result</h2>
+            <TopResult track={all[0]} context={all} />
+          </section>
+          <section className="min-w-0">
+            <h2 className="text-[18px] font-bold mb-3">Songs</h2>
+            {all.slice(0, 5).map((t, i) => (
+              <TrackRow key={`${t.id}-${i}`} track={t} index={i} playlistContext={all} showAlbum={false} />
+            ))}
+          </section>
+          {all.length > 5 && (
+            <section className="col-span-2 -mx-2">
+              <h2 className="text-[18px] font-bold mb-3 px-2">More results</h2>
+              <TrackList tracks={all.slice(5)} />
+            </section>
           )}
-
-          {/* Results List */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
-              <span>Matching Songs ({currentDisplayList.length})</span>
-              {currentDisplayList.length > 0 && (
-                <button
-                  onClick={() => playTrack(currentDisplayList[0], currentDisplayList)}
-                  className="text-[11px] font-bold text-[#b4ff39] hover:underline"
-                >
-                  Play All
-                </button>
-              )}
-            </h3>
-
-            {currentDisplayList.length === 0 && !isSearching && (
-              <div className="text-center py-12 space-y-2">
-                <Search className="w-8 h-8 text-zinc-600 mx-auto" />
-                <p className="text-sm text-zinc-400 font-semibold">
-                  No matching tracks found for "{globalSearchQuery}"
-                </p>
-                <p className="text-xs text-zinc-600">
-                  Try searching for another artist, song title, or genre.
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-1">
-              {currentDisplayList.map((track, idx) => (
-                <TrackRow
-                  key={`${track.id}-${idx}`}
-                  track={track}
-                  index={idx}
-                  playlistContext={currentDisplayList}
-                />
-              ))}
-            </div>
-          </div>
         </div>
+      ) : shown.length > 0 ? (
+        <div className="px-6">
+          <TrackList tracks={shown} />
+        </div>
+      ) : (
+        !loading && (
+          <div className="px-8">
+            <EmptyState
+              title={tab === "local" ? "No matches in your library" : `No ${tab === "jiosaavn" ? "JioSaavn" : tab === "server" ? "server" : "YouTube"} results`}
+              body={tab === "local" ? "Add a music folder from Folders to search your own files." : undefined}
+            />
+          </div>
+        )
       )}
+    </div>
+  );
+};
+
+const TopResult: React.FC<{ track: Track; context: Track[] }> = ({ track, context }) => {
+  const currentId = usePlayerStore((s) => s.currentTrack?.id);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const { openContextMenu } = useUiStore();
+  const current = currentId === track.id;
+  const play = () => {
+    const p = usePlayerStore.getState();
+    current ? p.togglePlayPause() : p.playTrack(track, context);
+  };
+  return (
+    <div
+      onDoubleClick={play}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY, track);
+      }}
+      className="group relative p-5 rounded-xl bg-white/[0.05] hover:bg-white/[0.08] transition-colors"
+    >
+      <Artwork src={track.artworkUrl} className="w-24 h-24 shadow-lg shadow-black/30" />
+      <p className={`mt-5 text-[26px] font-bold tracking-[-0.02em] leading-tight line-clamp-2 ${current ? "text-signal" : ""}`}>
+        {track.title}
+      </p>
+      <p className="mt-1.5 text-[13px] text-ink-2 truncate">
+        {track.artists.join(", ")}
+        <span className="text-ink-3">{`  ·  ${sourceLabel(track.providerId, track.sourceKind)}`}</span>
+      </p>
+      <div className="absolute right-5 bottom-5">
+        <PlayButton size="lg" playing={current && isPlaying} onClick={play} className="shadow-xl shadow-black/40" />
+      </div>
     </div>
   );
 };
