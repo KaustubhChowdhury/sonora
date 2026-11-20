@@ -1,53 +1,34 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
-interface SubsonicSettings {
+/**
+ * Subsonic / Navidrome connection. Only the salted token is stored (Subsonic's
+ * token auth: md5(password + salt)), never the password itself.
+ */
+export interface SubsonicSettings {
   serverUrl: string;
   username: string;
   token: string;
   salt: string;
   isConnected: boolean;
-  serverVersion?: string;
   statusMessage?: string;
 }
 
 interface ProviderState {
-  jamendoEnabled: boolean;
-  jamendoClientId: string;
-  
   subsonic: SubsonicSettings;
-  
-  // Actions
-  setJamendoEnabled: (enabled: boolean) => void;
-  setJamendoClientId: (id: string) => void;
-  setSubsonicConfig: (cfg: Partial<SubsonicSettings>) => void;
-  setSubsonicConnected: (connected: boolean, ver?: string, msg?: string) => void;
+  setSubsonic: (cfg: Partial<SubsonicSettings>) => void;
+  disconnectSubsonic: () => void;
 }
 
-export const useProviderStore = create<ProviderState>((set) => ({
-  jamendoEnabled: true,
-  jamendoClientId: "56d30c95",
+const EMPTY: SubsonicSettings = { serverUrl: "", username: "", token: "", salt: "", isConnected: false };
 
-  subsonic: {
-    serverUrl: "",
-    username: "",
-    token: "",
-    salt: "",
-    isConnected: false,
-    serverVersion: undefined,
-    statusMessage: undefined,
-  },
-
-  setJamendoEnabled: (enabled) => set({ jamendoEnabled: enabled }),
-  setJamendoClientId: (id) => set({ jamendoClientId: id }),
-  setSubsonicConfig: (cfg) =>
-    set((state) => ({ subsonic: { ...state.subsonic, ...cfg } })),
-  setSubsonicConnected: (connected, ver, msg) =>
-    set((state) => ({
-      subsonic: {
-        ...state.subsonic,
-        isConnected: connected,
-        serverVersion: ver,
-        statusMessage: msg,
-      },
-    })),
-}));
+export const useProviderStore = create<ProviderState>()(
+  persist(
+    (set) => ({
+      subsonic: EMPTY,
+      setSubsonic: (cfg) => set((s) => ({ subsonic: { ...s.subsonic, ...cfg } })),
+      disconnectSubsonic: () => set({ subsonic: EMPTY }),
+    }),
+    { name: "sonora-providers", version: 2, storage: createJSONStorage(() => localStorage), migrate: () => ({}) as any }
+  )
+);

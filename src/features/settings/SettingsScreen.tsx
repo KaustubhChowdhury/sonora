@@ -1,301 +1,205 @@
 import React, { useState } from "react";
-import {
-  FolderPlus,
-  Server,
-  Shield,
-  Keyboard,
-  Info,
-  HardDrive,
-  RefreshCw,
-  Trash2,
-  CheckCircle2,
-  AlertCircle,
-  Download,
-} from "lucide-react";
+import MD5 from "crypto-js/md5";
+import { FolderOpen, FolderPlus, Trash2 } from "lucide-react";
 import { useLibraryStore } from "../../stores/libraryStore";
 import { useProviderStore } from "../../stores/providerStore";
 import { useUiStore } from "../../stores/uiStore";
-import { TauriBridge } from "../../services/tauriBridge";
+import { TauriBridge, getJamendoClientId, setJamendoClientId } from "../../services/tauriBridge";
+import { addFolderWithPicker, removeFolder } from "../../services/libraryActions";
+import { Button, IconButton, PageHeader, TextField } from "../../components/ui/primitives";
 
-export const SettingsScreen: React.FC = () => {
-  const { folders, addFolder, removeFolder, setScanStatus, addTracks } = useLibraryStore();
-  const { subsonic, setSubsonicConfig, setSubsonicConnected } = useProviderStore();
+const Group: React.FC<{ title: string; description?: React.ReactNode; children: React.ReactNode }> = ({ title, description, children }) => (
+  <section className="grid grid-cols-[220px_minmax(0,1fr)] gap-10 py-8 border-t border-line">
+    <div>
+      <h2 className="text-[15px] font-semibold">{title}</h2>
+      {description && <p className="mt-1.5 text-[12px] text-ink-3 leading-relaxed">{description}</p>}
+    </div>
+    <div className="min-w-0">{children}</div>
+  </section>
+);
+
+export const SettingsScreen: React.FC = () => (
+  <div className="flex-1 overflow-y-auto px-8 pb-20">
+    <div className="max-w-[880px]">
+      <PageHeader title="Settings" />
+      <FoldersGroup />
+      <ServerGroup />
+      <JamendoGroup />
+      <DataGroup />
+      <ShortcutsGroup />
+      <p className="pt-8 border-t border-line text-[12px] text-ink-3">Sonora 1.0.0</p>
+    </div>
+  </div>
+);
+
+const FoldersGroup: React.FC = () => {
+  const { folders, scanStatus } = useLibraryStore();
+  return (
+    <Group title="Music folders" description="Songs in these folders make up your library. Files are read in place, never copied or uploaded.">
+      {folders.length > 0 && (
+        <ul className="mb-4 border-t border-line">
+          {folders.map((f) => (
+            <li key={f} className="flex items-center gap-3 h-11 border-b border-line">
+              <FolderOpen className="w-4 h-4 text-ink-3 shrink-0" />
+              <span className="flex-1 text-[13px] truncate select-text">{f}</span>
+              <IconButton label="Remove folder" size="sm" onClick={() => removeFolder(f)} className="hover:text-danger">
+                <Trash2 className="w-4 h-4" />
+              </IconButton>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Button onClick={addFolderWithPicker} disabled={scanStatus.isScanning}>
+        <FolderPlus className="w-4 h-4" /> {scanStatus.isScanning ? "Scanning…" : "Add folder"}
+      </Button>
+    </Group>
+  );
+};
+
+const ServerGroup: React.FC = () => {
+  const { subsonic, setSubsonic, disconnectSubsonic } = useProviderStore();
   const { showToast } = useUiStore();
+  const [url, setUrl] = useState(subsonic.serverUrl);
+  const [user, setUser] = useState(subsonic.username);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [testStatus, setTestStatus] = useState<string | null>(null);
-  const [isTesting, setIsTesting] = useState(false);
-
-  const handleAddFolder = async () => {
-    const path = prompt("Enter music directory path (e.g. C:\\Users\\Music):");
-    if (path && path.trim()) {
-      addFolder(path.trim());
-      showToast(`Added folder: ${path.trim()}`);
-      // Trigger scan
-      setScanStatus({ isScanning: true, currentFolder: path.trim() });
-      const res = await TauriBridge.scanFolder(path.trim());
-      setScanStatus({
-        isScanning: false,
-        scannedFiles: res.scannedFiles,
-        totalCandidates: res.totalCandidates,
-        errorCount: res.errorCount,
-        errors: res.errors,
-      });
-      const updated = await TauriBridge.getLibraryTracks();
-      addTracks(updated);
-      showToast(`Scan complete: ${res.scannedFiles} tracks indexed`);
-    }
-  };
-
-  const handleTestSubsonic = async () => {
-    if (!subsonic.serverUrl || !subsonic.username) {
-      alert("Please enter both server URL and username.");
-      return;
-    }
-    setIsTesting(true);
-    setTestStatus(null);
+  const connect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const salt = Math.random().toString(36).slice(2, 12);
+    const token = MD5(password + salt).toString();
+    const cfg = { serverUrl: url.trim().replace(/\/+$/, ""), username: user.trim(), token, salt };
     try {
-      // In Tauri or mock
-      const msg = `Successfully verified Subsonic API connection to ${subsonic.serverUrl}`;
-      setSubsonicConnected(true, "1.16.1", msg);
-      setTestStatus(msg);
-      showToast("Personal music server connected!");
+      const msg = await TauriBridge.testSubsonic(cfg);
+      setSubsonic({ ...cfg, isConnected: true, statusMessage: msg });
+      setPassword("");
+      showToast("Connected to your server");
     } catch (err) {
-      setSubsonicConnected(false, undefined, String(err));
-      setTestStatus(`Error: ${err}`);
+      setError(String(err instanceof Error ? err.message : err));
     } finally {
-      setIsTesting(false);
+      setBusy(false);
     }
-  };
-
-  const handleExportDiagnostics = () => {
-    const diag = {
-      product: "Sonora Music Player",
-      version: "1.0.0",
-      timestamp: new Date().toISOString(),
-      platform: "Windows 10/11 x86_64",
-      audioEngine: "WASAPI Shared / Exclusive Bit-Perfect",
-      decoder: "Symphonia 0.5 (FLAC, WAV, MP3, ALAC, AAC, Vorbis, Opus)",
-      tagEngine: "Lofty 0.21",
-      foldersCount: folders.length,
-    };
-    const blob = new Blob([JSON.stringify(diag, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sonora-diagnostics-${Date.now()}.json`;
-    a.click();
-    showToast("Exported diagnostics bundle");
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 space-y-8 select-none max-w-4xl pb-48">
-      {/* Title */}
-      <div className="pb-4 border-b border-white/[0.06]">
-        <h1 className="text-2xl font-bold text-white tracking-tight">Settings</h1>
-        <p className="text-xs text-zinc-400 mt-1">
-          Manage music directories, personal music server integrations, privacy defaults, and diagnostics.
-        </p>
-      </div>
-
-      {/* SECTION 1: LIBRARY FOLDERS */}
-      <section className="bg-surface-muted/50 rounded-3xl border border-white/[0.06] p-6 space-y-4">
-        <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-          <div>
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <HardDrive className="w-4 h-4 text-purple-400" />
-              <span>Library Roots</span>
-            </h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Sonora scans these directories for lossless FLAC, ALAC, WAV, MP3, and AAC audio files.
+    <Group
+      title="Your music server"
+      description="Connect Navidrome, Airsonic or any Subsonic-compatible server to search and stream it alongside everything else."
+    >
+      {subsonic.isConnected ? (
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[13px] text-ink truncate">
+              {subsonic.username} on {subsonic.serverUrl}
             </p>
+            <p className="text-[12px] text-ink-3 mt-0.5">Connected. Its songs appear in search under “Your server”.</p>
           </div>
-
-          <button
-            onClick={handleAddFolder}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md transition-colors"
-          >
-            <FolderPlus className="w-4 h-4" />
-            <span>Add Folder</span>
-          </button>
+          <Button variant="ghost" onClick={disconnectSubsonic}>
+            Disconnect
+          </Button>
         </div>
-
-        <div className="space-y-2">
-          {folders.length === 0 ? (
-            <p className="text-xs text-zinc-500 italic py-2">No folders added yet.</p>
-          ) : (
-            folders.map((folder) => (
-              <div
-                key={folder}
-                className="flex items-center justify-between p-3 rounded-xl bg-surface-elevated/40 border border-white/[0.04]"
-              >
-                <span className="font-mono text-xs text-zinc-200 truncate pr-4">{folder}</span>
-                <button
-                  onClick={() => removeFolder(folder)}
-                  className="text-zinc-500 hover:text-red-400 p-1 transition-colors"
-                  title="Remove folder"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-
-      {/* SECTION 2: PERSONAL MUSIC SERVER (NAVIDROME / SUBSONIC) */}
-      <section className="bg-surface-muted/50 rounded-3xl border border-white/[0.06] p-6 space-y-4">
-        <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-          <div>
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <Server className="w-4 h-4 text-emerald-400" />
-              <span>Personal Music Server (Navidrome / Subsonic)</span>
-            </h2>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Connect your self-hosted music server to stream your remote library.
-            </p>
+      ) : (
+        <form onSubmit={connect} className="grid grid-cols-2 gap-3 max-w-lg">
+          <div className="col-span-2">
+            <TextField label="Server address" placeholder="https://music.example.com" value={url} onChange={(e) => setUrl(e.target.value)} />
           </div>
-
-          {subsonic.isConnected && (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Connected</span>
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="space-y-1">
-            <label className="text-zinc-400 font-semibold">Server URL</label>
-            <input
-              type="text"
-              placeholder="https://navidrome.home.local:4533"
-              value={subsonic.serverUrl}
-              onChange={(e) => setSubsonicConfig({ serverUrl: e.target.value })}
-              className="w-full bg-surface-elevated border border-white/[0.08] rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-purple-500 font-mono text-xs"
-            />
+          <TextField label="Username" value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" />
+          <TextField label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          {error && <p className="col-span-2 text-[12px] text-danger">{error}</p>}
+          <div className="col-span-2">
+            <Button variant="primary" type="submit" disabled={busy || !url.trim() || !user.trim() || !password}>
+              {busy ? "Connecting…" : "Connect"}
+            </Button>
           </div>
-
-          <div className="space-y-1">
-            <label className="text-zinc-400 font-semibold">Username</label>
-            <input
-              type="text"
-              placeholder="e.g. audiophile"
-              value={subsonic.username}
-              onChange={(e) => setSubsonicConfig({ username: e.target.value })}
-              className="w-full bg-surface-elevated border border-white/[0.08] rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-purple-500 font-mono text-xs"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-zinc-400 font-semibold">Password / Auth Token</label>
-            <input
-              type="password"
-              placeholder="••••••••••••"
-              value={subsonic.token}
-              onChange={(e) => setSubsonicConfig({ token: e.target.value })}
-              className="w-full bg-surface-elevated border border-white/[0.08] rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-purple-500 font-mono text-xs"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-zinc-400 font-semibold">Salt (Optional)</label>
-            <input
-              type="text"
-              placeholder="e.g. c99f"
-              value={subsonic.salt}
-              onChange={(e) => setSubsonicConfig({ salt: e.target.value })}
-              className="w-full bg-surface-elevated border border-white/[0.08] rounded-xl px-3 py-2 text-zinc-200 focus:outline-none focus:border-purple-500 font-mono text-xs"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2">
-          {testStatus && (
-            <p className="text-xs text-emerald-400 font-mono">{testStatus}</p>
-          )}
-          <button
-            onClick={handleTestSubsonic}
-            disabled={isTesting}
-            className="ml-auto px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors disabled:opacity-50"
-          >
-            {isTesting ? "Testing Connection..." : "Test & Save Connection"}
-          </button>
-        </div>
-      </section>
-
-      {/* SECTION 3: KEYBOARD SHORTCUTS REFERENCE */}
-      <section className="bg-surface-muted/50 rounded-3xl border border-white/[0.06] p-6 space-y-4">
-        <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          <Keyboard className="w-4 h-4 text-purple-400" />
-          <span>Keyboard Shortcuts</span>
-        </h2>
-
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="flex justify-between p-2 rounded-lg bg-surface-elevated/40">
-            <span className="text-zinc-400">Play / Pause</span>
-            <kbd className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">Space</kbd>
-          </div>
-          <div className="flex justify-between p-2 rounded-lg bg-surface-elevated/40">
-            <span className="text-zinc-400">Seek Forward 5s</span>
-            <kbd className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">Right Arrow</kbd>
-          </div>
-          <div className="flex justify-between p-2 rounded-lg bg-surface-elevated/40">
-            <span className="text-zinc-400">Seek Backward 5s</span>
-            <kbd className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">Left Arrow</kbd>
-          </div>
-          <div className="flex justify-between p-2 rounded-lg bg-surface-elevated/40">
-            <span className="text-zinc-400">Volume Up / Down</span>
-            <kbd className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">Up / Down</kbd>
-          </div>
-          <div className="flex justify-between p-2 rounded-lg bg-surface-elevated/40">
-            <span className="text-zinc-400">Toggle Queue</span>
-            <kbd className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">Ctrl + Q</kbd>
-          </div>
-          <div className="flex justify-between p-2 rounded-lg bg-surface-elevated/40">
-            <span className="text-zinc-400">Toggle Lyrics</span>
-            <kbd className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">Ctrl + L</kbd>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 4: PRIVACY & LOCAL-FIRST COMMITMENT */}
-      <section className="bg-surface-muted/50 rounded-3xl border border-white/[0.06] p-6 space-y-3">
-        <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          <Shield className="w-4 h-4 text-purple-400" />
-          <span>Local-First &amp; Privacy Guarantee</span>
-        </h2>
-        <div className="text-xs text-zinc-400 leading-relaxed space-y-2">
-          <p>
-            • <strong>No Hidden Uploads:</strong> Sonora never uploads your music files or audio fingerprinting data to any cloud service.
-          </p>
-          <p>
-            • <strong>Secure OS Storage:</strong> Passwords and API tokens are never saved in plain text in database files or diagnostic logs.
-          </p>
-          <p>
-            • <strong>Transparent Playback:</strong> Audio statistics reflect verified file properties and negotiated WASAPI endpoint formats.
-          </p>
-        </div>
-
-        <div className="pt-2">
-          <button
-            onClick={handleExportDiagnostics}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Diagnostics Bundle</span>
-          </button>
-        </div>
-      </section>
-
-      {/* SECTION 5: ABOUT & SBOM */}
-      <section className="p-6 rounded-3xl bg-surface-muted/30 border border-white/[0.04] text-xs text-zinc-500 space-y-2 font-mono">
-        <div className="flex items-center justify-between text-zinc-400 font-semibold font-sans">
-          <span>Sonora Desktop Player</span>
-          <span>Version 1.0.0 (Production Release)</span>
-        </div>
-        <p>Engineered with Tauri 2, Rust, Symphonia, WASAPI, SQLite, React, Vite &amp; Tailwind CSS.</p>
-        <p>Licensed under MIT. Open-source libraries: Symphonia (MPL-2.0), Lofty (MIT/Apache), CPAL (Apache-2.0), Rusqlite (MIT).</p>
-      </section>
-    </div>
+        </form>
+      )}
+    </Group>
   );
 };
+
+const JamendoGroup: React.FC = () => {
+  const [value, setValue] = useState(getJamendoClientId());
+  const [saved, setSaved] = useState(getJamendoClientId());
+  return (
+    <Group
+      title="Free music"
+      description={
+        <>
+          The Free music page uses Jamendo. Get a free client ID at{" "}
+          <button className="underline hover:text-ink" onClick={() => TauriBridge.openExternal("https://devportal.jamendo.com/")}>
+            devportal.jamendo.com
+          </button>
+          .
+        </>
+      }
+    >
+      <form
+        className="flex items-end gap-2 max-w-md"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setJamendoClientId(value);
+          setSaved(value.trim());
+        }}
+      >
+        <div className="flex-1">
+          <TextField label="Jamendo client ID" value={value} onChange={(e) => setValue(e.target.value)} />
+        </div>
+        <Button type="submit" disabled={value.trim() === saved}>
+          Save
+        </Button>
+      </form>
+    </Group>
+  );
+};
+
+const DataGroup: React.FC = () => {
+  const { recentlyPlayed, clearRecentlyPlayed } = useLibraryStore();
+  const { showToast } = useUiStore();
+  return (
+    <Group title="Listening data" description="History, liked songs and playlists are saved on this computer.">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          disabled={!recentlyPlayed.length}
+          onClick={() => {
+            clearRecentlyPlayed();
+            localStorage.removeItem("sonora-recent-searches");
+            showToast("Cleared history and recent searches");
+          }}
+        >
+          Clear history
+        </Button>
+      </div>
+    </Group>
+  );
+};
+
+const SHORTCUTS: [string, string][] = [
+  ["Play or pause", "Space"],
+  ["Next / previous song", "Ctrl → / Ctrl ←"],
+  ["Skip forward / back 5 seconds", "Shift → / Shift ←"],
+  ["Volume up / down", "Ctrl ↑ / Ctrl ↓"],
+  ["Mute", "M"],
+  ["Search", "Ctrl K"],
+  ["Queue", "Ctrl Q"],
+  ["Lyrics", "Ctrl L"],
+  ["Go back", "Alt ←"],
+  ["Close full-screen player", "Esc"],
+];
+
+const ShortcutsGroup: React.FC = () => (
+  <Group title="Keyboard shortcuts">
+    <dl className="grid grid-cols-[1fr_auto] max-w-md text-[13px]">
+      {SHORTCUTS.map(([k, v]) => (
+        <React.Fragment key={k}>
+          <dt className="py-2 border-b border-line text-ink-2">{k}</dt>
+          <dd className="py-2 border-b border-line text-right">
+            <kbd className="font-sans text-[12px] text-ink">{v}</kbd>
+          </dd>
+        </React.Fragment>
+      ))}
+    </dl>
+  </Group>
+);
