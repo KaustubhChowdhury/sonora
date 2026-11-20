@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { Track } from "../types/music";
+import type { SaavnCollection } from "../services/tauriBridge";
 
 export type AppRoute =
   | "home"
@@ -13,7 +14,8 @@ export type AppRoute =
   | "playlist-detail"
   | "explore"
   | "audio-studio"
-  | "settings";
+  | "settings"
+  | "collection";
 
 export type InspectorTab = "queue" | "lyrics" | "track-info";
 
@@ -29,6 +31,7 @@ interface UiState {
   selectedAlbumId: string | null;
   selectedArtistId: string | null;
   selectedPlaylistId: string | null;
+  selectedCollection: SaavnCollection | null;
   
   inspectorOpen: boolean;
   inspectorTab: InspectorTab;
@@ -41,11 +44,11 @@ interface UiState {
   contextMenu: ContextMenuState;
   toastMessage: string | null;
   globalSearchQuery: string;
-  history: { route: AppRoute; albumId: string | null; artistId: string | null; playlistId: string | null }[];
+  history: { route: AppRoute; albumId: string | null; artistId: string | null; playlistId: string | null; collection: SaavnCollection | null }[];
   newPlaylist: { open: boolean; tracks: Track[] };
 
   // Actions
-  navigate: (route: AppRoute, params?: { albumId?: string; artistId?: string; playlistId?: string }) => void;
+  navigate: (route: AppRoute, params?: { albumId?: string; artistId?: string; playlistId?: string; collection?: SaavnCollection }) => void;
   goBack: () => void;
   openNewPlaylist: (tracks?: Track[]) => void;
   closeNewPlaylist: () => void;
@@ -69,6 +72,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   selectedAlbumId: null,
   selectedArtistId: null,
   selectedPlaylistId: null,
+  selectedCollection: null,
 
   inspectorOpen: false,
   inspectorTab: "queue",
@@ -95,17 +99,25 @@ export const useUiStore = create<UiState>((set, get) => ({
       cur.activeRoute === route &&
       cur.selectedAlbumId === (params?.albumId ?? null) &&
       cur.selectedArtistId === (params?.artistId ?? null) &&
-      cur.selectedPlaylistId === (params?.playlistId ?? null);
+      cur.selectedPlaylistId === (params?.playlistId ?? null) &&
+      cur.selectedCollection?.id === params?.collection?.id;
     if (same) return;
     set({
       history: [
         ...cur.history.slice(-30),
-        { route: cur.activeRoute, albumId: cur.selectedAlbumId, artistId: cur.selectedArtistId, playlistId: cur.selectedPlaylistId },
+        {
+          route: cur.activeRoute,
+          albumId: cur.selectedAlbumId,
+          artistId: cur.selectedArtistId,
+          playlistId: cur.selectedPlaylistId,
+          collection: cur.selectedCollection,
+        },
       ],
       activeRoute: route,
       selectedAlbumId: params?.albumId ?? null,
       selectedArtistId: params?.artistId ?? null,
       selectedPlaylistId: params?.playlistId ?? null,
+      selectedCollection: params?.collection ?? null,
     });
   },
 
@@ -119,6 +131,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       selectedAlbumId: prev.albumId,
       selectedArtistId: prev.artistId,
       selectedPlaylistId: prev.playlistId,
+      selectedCollection: prev.collection,
     });
   },
 

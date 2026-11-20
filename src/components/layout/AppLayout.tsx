@@ -23,6 +23,7 @@ import { PlaylistsScreen } from "../../features/playlists/PlaylistsScreen";
 import { AudioStudioScreen } from "../../features/audioStudio/AudioStudioScreen";
 import { ExploreScreen } from "../../features/explore/ExploreScreen";
 import { SettingsScreen } from "../../features/settings/SettingsScreen";
+import { CollectionScreen } from "../../features/collection/CollectionScreen";
 
 const SCREENS: Record<string, React.FC> = {
   home: HomeScreen,
@@ -37,13 +38,14 @@ const SCREENS: Record<string, React.FC> = {
   "audio-studio": AudioStudioScreen,
   explore: ExploreScreen,
   settings: SettingsScreen,
+  collection: CollectionScreen,
 };
 
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t as HTMLElement)?.isContentEditable;
 
 export const AppLayout: React.FC = () => {
-  const { activeRoute, selectedAlbumId, selectedArtistId, selectedPlaylistId, toastMessage, toggleInspector, navigate, newPlaylist, closeNewPlaylist, showToast } =
+  const { activeRoute, selectedAlbumId, selectedArtistId, selectedPlaylistId, selectedCollection, toastMessage, toggleInspector, navigate, newPlaylist, closeNewPlaylist, showToast } =
     useUiStore();
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export const AppLayout: React.FC = () => {
   }, [toggleInspector]);
 
   const Screen = SCREENS[activeRoute] ?? HomeScreen;
-  const pageKey = `${activeRoute}:${selectedAlbumId ?? ""}:${selectedArtistId ?? ""}:${selectedPlaylistId ?? ""}`;
+  const pageKey = `${activeRoute}:${selectedAlbumId ?? ""}:${selectedArtistId ?? ""}:${selectedPlaylistId ?? ""}:${selectedCollection?.id ?? ""}`;
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg text-ink">
