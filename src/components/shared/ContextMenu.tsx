@@ -12,7 +12,9 @@ import {
   Info,
   Plus,
   Trash2,
+  Radio,
 } from "lucide-react";
+import { startRadio } from "../../services/autoplay";
 import { useUiStore } from "../../stores/uiStore";
 import { usePlayerStore } from "../../stores/playerStore";
 import { useLibraryStore } from "../../stores/libraryStore";
@@ -118,6 +120,9 @@ export const ContextMenu: React.FC = () => {
     >
       <Item icon={<Play />} onClick={run(() => playTrack(track))}>
         Play
+      </Item>
+      <Item icon={<Radio />} onClick={run(() => startRadio(track))}>
+        Start radio
       </Item>
       <Item
         icon={<ListStart />}

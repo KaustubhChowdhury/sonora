@@ -8,6 +8,7 @@ import { useActiveLyricIndex, useLyrics, useScrollActiveLine } from "../../hooks
 import { formatTime, sourceLabel, plural } from "../../lib/format";
 import { cn } from "../../lib/cn";
 import { Track } from "../../types/music";
+import { Switch } from "../audio/AudioBoosterModal";
 
 export const Inspector: React.FC = () => {
   const { inspectorOpen, inspectorTab, setInspectorTab, closeInspector } = useUiStore();
@@ -39,7 +40,8 @@ export const Inspector: React.FC = () => {
 /* ---------------- Queue ---------------- */
 
 const QueuePanel: React.FC = () => {
-  const { queue, queueIndex, isPlaying, removeFromQueue, clearQueue, reorderQueue } = usePlayerStore();
+  const { queue, queueIndex, isPlaying, removeFromQueue, clearQueue, reorderQueue, autoplay, toggleAutoplay, autoplayIds, autoplayLoading } =
+    usePlayerStore();
   const { openNewPlaylist } = useUiStore();
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
@@ -54,7 +56,10 @@ const QueuePanel: React.FC = () => {
   }
 
   const current = queue[queueIndex];
-  const upNext = queue.map((t, i) => ({ t, i })).filter(({ i }) => i > queueIndex);
+  const autoIds = new Set(autoplayIds);
+  const upNextAll = queue.map((t, i) => ({ t, i })).filter(({ i }) => i > queueIndex);
+  const upNext = upNextAll.filter(({ t }) => !autoIds.has(t.id));
+  const fromAutoplay = upNextAll.filter(({ t }) => autoIds.has(t.id));
   const played = queueIndex > 0 ? queueIndex : 0;
 
   const Row: React.FC<{ t: Track; i: number; isCurrent?: boolean }> = ({ t, i, isCurrent }) => (
@@ -106,12 +111,31 @@ const QueuePanel: React.FC = () => {
             <Row t={current} i={queueIndex} isCurrent />
           </>
         )}
-        <h3 className="px-2 pt-5 pb-1 text-[12px] font-medium text-ink-3">
-          {upNext.length ? `Next up · ${upNext.length}` : "Nothing up next"}
-        </h3>
+        {(upNext.length > 0 || !autoplay) && (
+          <h3 className="px-2 pt-5 pb-1 text-[12px] font-medium text-ink-3">
+            {upNext.length ? `Next up · ${upNext.length}` : "Nothing up next"}
+          </h3>
+        )}
         {upNext.map(({ t, i }) => (
           <Row key={`${t.id}-${i}`} t={t} i={i} />
         ))}
+        <div className="flex items-center justify-between gap-3 px-2 pt-6 pb-1">
+          <div>
+            <h3 className="text-[13px] font-semibold text-ink">Autoplay</h3>
+            <p className="text-[12px] text-ink-3">
+              {autoplay
+                ? autoplayLoading
+                  ? "Finding songs like this one…"
+                  : "Similar songs play when the queue ends"
+                : "Playback stops when the queue ends"}
+            </p>
+          </div>
+          <Switch checked={autoplay} onChange={toggleAutoplay} label="Autoplay" />
+        </div>
+        {autoplay &&
+          fromAutoplay.map(({ t, i }) => (
+            <Row key={`${t.id}-${i}`} t={t} i={i} />
+          ))}
         {played > 0 && <p className="px-2 pt-4 text-[12px] text-ink-3">{plural(played, "earlier song")} in this queue</p>}
       </div>
       <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-3 border-t border-line">
