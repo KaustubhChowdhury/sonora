@@ -4,8 +4,16 @@ A desktop music player for Windows that plays your own files and streams from Ji
 
 Built with Tauri 2 (Rust) and React.
 
+## Download
+
+**[Download the latest installer for Windows](https://github.com/KaustubhChowdhury/sonora/releases/latest)** (Windows 10 or 11, 64-bit).
+
+Pick `Sonora_x.y.z_x64-setup.exe` from the release's files. The installer isn't code-signed yet, so Windows SmartScreen may warn on first run: choose **More info → Run anyway**.
+
 ## Features
 
+- **A home that learns your taste**: Listen again, Quick picks, mixes of your favourite artists and "Because you listened to", built from what you play and skip.
+- **Autoplay**: when the queue ends, similar songs keep playing. Right-click any song to start a radio from it.
 - **Your files**: add folders and Sonora reads tags and cover art from FLAC, WAV, ALAC, MP3, AAC, Ogg and Opus. Files stay where they are.
 - **Native audio engine** (Rust, Symphonia + WASAPI) for local files, with a Shared mode and a bit-perfect Exclusive mode.
 - **Streaming**: search and play JioSaavn and YouTube, free Creative Commons music from Jamendo, and your own Subsonic-compatible server.
